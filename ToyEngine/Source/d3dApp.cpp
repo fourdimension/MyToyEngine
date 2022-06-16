@@ -17,11 +17,14 @@ namespace GameCore
     }
 
     HWND g_hWnd = nullptr;
+    HICON hIcon;
 
     LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
 	int RunApplication(IGameApp& app, const wchar_t* className, HINSTANCE hInst, int nCmdShow) 
 	{
+        hIcon = LoadIcon(hInst, MAKEINTRESOURCE(IDI_MAINICON));
+
         // Register class
         WNDCLASSEX wcex;
         wcex.cbSize = sizeof(WNDCLASSEX);
@@ -37,8 +40,8 @@ namespace GameCore
         wcex.lpszMenuName = nullptr;
         wcex.lpszClassName = className;
 
-        wcex.hIcon = LoadIcon(hInst, IDI_APPLICATION);
-        wcex.hIconSm = LoadIcon(hInst, IDI_APPLICATION);
+        wcex.hIcon = hIcon;
+        wcex.hIconSm = hIcon;
         ASSERT(0 != RegisterClassEx(&wcex), "Unable to register a window");
 
         // Create and display window 

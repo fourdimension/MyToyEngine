@@ -52,6 +52,8 @@
 #include <dxgidebug.h>
 #endif
 
+#define MAX_NAME_STRING 256
+
 #define D3D12_GPU_VIRTUAL_ADDRESS_NULL      ((D3D12_GPU_VIRTUAL_ADDRESS)0)
 #define D3D12_GPU_VIRTUAL_ADDRESS_UNKNOWN   ((D3D12_GPU_VIRTUAL_ADDRESS)-1)
 #define MY_IID_PPV_ARGS                     IID_PPV_ARGS
@@ -74,3 +76,5 @@
 //#include "EngineTuning.h"
 //#include "EngineProfiling.h"
 #include "../Util/CommandLineArg.h"
+
+#include "../resource.h"
