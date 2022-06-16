@@ -6,7 +6,8 @@
 **/src/obj
 **/.vs
 
-ToyEngine/*.vcproj.*
+ToyEngine/*.vcproj.filters
+ToyEngine/*.vcproj.user
 ToyEngine/*.vcxproj
 ToyEngine/Intermediate
 Build/
