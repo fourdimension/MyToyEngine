@@ -1,0 +1,13 @@
+﻿
+**/bin/x64
+**/obj/x64
+**/src/packages
+**/src/bin
+**/src/obj
+**/.vs
+
+ToyEngine/*.vcproj.*
+ToyEngine/*.vcxproj
+ToyEngine/Intermediate
+Build/
+*.sln
