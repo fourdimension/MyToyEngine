@@ -1,4 +1,4 @@
-#include "d3dApp.h"
+#include "GameApp.h"
 
 
 WCHAR       WindowClass[MAX_NAME_STRING];
@@ -8,6 +8,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     /*Initialize Global Variable*/
     LoadString(hInstance, IDS_WINDOWCLASS, WindowClass, MAX_NAME_STRING);
 
-    GameCore::IGameApp app(hInstance);
-	return GameCore::RunApplication(app, WindowClass, hInstance, nCmdShow);
+    GameCore::GameApp app(hInstance);
+	return app.RunApplication(app, WindowClass, hInstance, nCmdShow);
 }
