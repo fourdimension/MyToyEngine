@@ -1,5 +1,5 @@
 #include "d3dApp.h"
-
+#include <sstream>
 
 namespace GameCore 
 {
@@ -7,8 +7,10 @@ namespace GameCore
 
     D3DApp::D3DApp(HINSTANCE hInst)
         : m_hAppInst(hInst),
+        m_MainWndCaption(L"Rendering a Cube"),
         m_DisplayWidth(800),
         m_DisplayHeight(600),
+        m_AppPaused(false),
         m_viewport(0.0f, 0.0f, static_cast<float>(m_DisplayWidth), static_cast<float>(m_DisplayHeight)),
         m_scissorRect(0, 0, static_cast<LONG>(m_DisplayWidth), static_cast<LONG>(m_DisplayHeight)),
         m_rtvDescriptorSize(0)
@@ -301,6 +303,32 @@ namespace GameCore
         m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
     }
 
+    void D3DApp::CalculateFrameStats()
+    {
+        // calculate frames per second, and time needed to render a frame, show the window caption
+        static int frameCnt = 0;
+        static float timeElapsed = 0.0f;
+
+        frameCnt++;
+
+        if ((m_Timer.TotalTime() - timeElapsed) >= 1.0f)
+        {
+            float fps = (float)frameCnt; // fps = frameCnt / 1
+            float mspf = 1000.0f / fps;
+
+            std::wostringstream outs;
+            outs.precision(6);
+            outs << m_MainWndCaption << L"    "
+                << L"FPS: " << fps << L"    "
+                << L"Frame Time: " << mspf << L" (ms)";
+            SetWindowText(m_hWnd, outs.str().c_str());
+
+            // Reset for next average.
+            frameCnt = 0;
+            timeElapsed += 1.0f;
+        }
+    }
+
     // Helper function for acquiring the first available hardware adapter that supports Direct3D 12.
 // If no such adapter can be found, *ppAdapter will be set to nullptr.
     _Use_decl_annotations_
@@ -378,7 +406,7 @@ namespace GameCore
 
     LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
-	int D3DApp::RunApplication(D3DApp& app, const wchar_t* className, HINSTANCE hInst, int nCmdShow)
+	int D3DApp::InitApplication(D3DApp& app, const wchar_t* className, HINSTANCE hInst, int nCmdShow)
 	{
         hIcon = LoadIcon(hInst, MAKEINTRESOURCE(IDI_MAINICON));
 
@@ -415,15 +443,22 @@ namespace GameCore
             nullptr,
             nullptr,
             hInst,
-            &app);
+            nullptr);
 
         ASSERT(m_hWnd != 0);
 
         app.OnInit();
         ShowWindow(m_hWnd, nCmdShow);
 
+        return app.Run(app);
+	}
+
+    int D3DApp::Run(D3DApp& app)
+    {
         // Main sample loop.
         MSG msg = {};
+
+        m_Timer.Reset();
         while (msg.message != WM_QUIT)
         {
             // Process any messages in the queue.
@@ -432,29 +467,27 @@ namespace GameCore
                 TranslateMessage(&msg);
                 DispatchMessage(&msg);
             }
-            /*else {
-                app.OnRender();
-            }*/
+            else {
+                m_Timer.Tick();
+                if (!m_AppPaused) {
+                    CalculateFrameStats();
+                    app.OnRender();
+                }
+                else {
+                    Sleep(100);
+                }
+                
+            }
         }
 
         app.OnDestroy();
         return static_cast<char>(msg.wParam);
-	}
+    }
 
     LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
-        D3DApp* pSample = reinterpret_cast<D3DApp*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
-
         switch (message)
         {
-        case WM_CREATE:
-        {
-            // Save the DXSample* passed in to CreateWindow.
-            LPCREATESTRUCT pCreateStruct = reinterpret_cast<LPCREATESTRUCT>(lParam);
-            SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pCreateStruct->lpCreateParams));
-        }
-        return 0;
-
         case WM_SIZE:
             //Display::Resize((UINT)(UINT64)lParam & 0xFFFF, (UINT)(UINT64)lParam >> 16);
             break;
@@ -462,16 +495,8 @@ namespace GameCore
         case WM_DESTROY:
             PostQuitMessage(0);
             return 0;
-
-        case WM_PAINT:
-            if (pSample)
-            {
-                pSample->OnUpdate();
-                pSample->OnRender();
-            }
-            return 0;
         }
-        return DefWindowProc(hWnd, message, wParam, lParam);
 
+        return DefWindowProc(hWnd, message, wParam, lParam);
     }
 }

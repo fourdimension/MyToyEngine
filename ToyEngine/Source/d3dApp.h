@@ -1,6 +1,7 @@
 #pragma once	
 
 #include "pch.h"
+#include "GameTimer.h"
 #include "DXSampleHelper.h"
 
 
@@ -28,7 +29,8 @@ namespace GameCore
 		static HWND GetHWnd() { return m_hWnd; }
 		inline HANDLE GetFenceEvent() { return m_fenceEvent; }
 
-		int RunApplication(D3DApp& app, const wchar_t* className, HINSTANCE hInst, int nCmdShow);
+		int InitApplication(D3DApp& app, const wchar_t* className, HINSTANCE hInst, int nCmdShow);
+		int Run(D3DApp& app);
 
 		virtual void OnInit();
 		virtual void OnUpdate() = 0;
@@ -36,8 +38,6 @@ namespace GameCore
 		virtual void OnDestroy() = 0;
 
 	private:
-		
-
 		static const UINT FrameCount = 2;
 		static HWND m_hWnd;
 
@@ -59,6 +59,7 @@ namespace GameCore
 		void LoadAssets();
 		void PopulateCommandList();
 		void WaitForPreviousFrame();
+		void CalculateFrameStats();
 
 		void GetHardwareAdapter(
 			_In_ IDXGIFactory1* pFactory,
@@ -85,7 +86,9 @@ namespace GameCore
 		ComPtr<ID3D12GraphicsCommandList> m_commandList;
 		UINT m_rtvDescriptorSize;
 
-	
+		GameTimer m_Timer;
+		std::wstring m_MainWndCaption;
+		bool      m_AppPaused;       // if the application paused
 	};
 
 

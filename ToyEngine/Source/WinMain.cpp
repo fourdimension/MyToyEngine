@@ -9,5 +9,5 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     LoadString(hInstance, IDS_WINDOWCLASS, WindowClass, MAX_NAME_STRING);
 
     GameCore::GameApp app(hInstance);
-	return app.RunApplication(app, WindowClass, hInstance, nCmdShow);
+	return app.InitApplication(app, WindowClass, hInstance, nCmdShow);
 }
