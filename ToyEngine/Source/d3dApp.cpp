@@ -8,7 +8,10 @@ namespace GameCore
     D3DApp::D3DApp(HINSTANCE hInst)
         : m_hAppInst(hInst),
         m_DisplayWidth(800),
-        m_DisplayHeight(600)
+        m_DisplayHeight(600),
+        m_viewport(0.0f, 0.0f, static_cast<float>(m_DisplayWidth), static_cast<float>(m_DisplayHeight)),
+        m_scissorRect(0, 0, static_cast<LONG>(m_DisplayWidth), static_cast<LONG>(m_DisplayHeight)),
+        m_rtvDescriptorSize(0)
     {
         WCHAR assetsPath[512];
         GetAssetsPath(assetsPath, _countof(assetsPath)); // How to get path??
@@ -33,6 +36,9 @@ namespace GameCore
             if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
             {
                 debugController->EnableDebugLayer();
+
+                // Enable additional debug layers.
+                dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
             }
         }
     #endif
@@ -58,21 +64,22 @@ namespace GameCore
         ASSERT_SUCCEEDED(m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_commandQueue)));
 
         // Describe and create the swap chain.
-        DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
+        DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
         swapChainDesc.BufferCount = FrameCount;
-        swapChainDesc.BufferDesc.Width = GetWidth();
-        swapChainDesc.BufferDesc.Height = GetHeight();
-        swapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        swapChainDesc.Width = GetWidth();
+        swapChainDesc.Height = GetHeight();
+        swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
         swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-        swapChainDesc.OutputWindow = m_hWnd;
         swapChainDesc.SampleDesc.Count = 1;
-        swapChainDesc.Windowed = TRUE;
 
-        ComPtr<IDXGISwapChain> swapChain;
-        ASSERT_SUCCEEDED(dxgiFactory->CreateSwapChain(
+        ComPtr<IDXGISwapChain1> swapChain;
+        ASSERT_SUCCEEDED(dxgiFactory->CreateSwapChainForHwnd(
             m_commandQueue.Get(),        // Swap chain needs the queue so that it can force a flush on it.
+            m_hWnd,
             &swapChainDesc,
+            nullptr,
+            nullptr,
             &swapChain
         ));
 
@@ -189,6 +196,7 @@ namespace GameCore
                 // recommended. Every time the GPU needs it, the upload heap will be marshalled 
                 // over. Please read up on Default Heap usage. An upload heap is used here for 
                 // code simplicity and because there are very few verts to actually transfer.
+
                 CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
                 auto desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
                 ThrowIfFailed(m_device->CreateCommittedResource(
@@ -407,7 +415,7 @@ namespace GameCore
             nullptr,
             nullptr,
             hInst,
-            nullptr);
+            &app);
 
         ASSERT(m_hWnd != 0);
 
@@ -424,31 +432,46 @@ namespace GameCore
                 TranslateMessage(&msg);
                 DispatchMessage(&msg);
             }
-            else {
+            /*else {
                 app.OnRender();
-            }
+            }*/
         }
 
         app.OnDestroy();
-        return 0;
+        return static_cast<char>(msg.wParam);
 	}
 
     LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
+        D3DApp* pSample = reinterpret_cast<D3DApp*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+
         switch (message)
         {
+        case WM_CREATE:
+        {
+            // Save the DXSample* passed in to CreateWindow.
+            LPCREATESTRUCT pCreateStruct = reinterpret_cast<LPCREATESTRUCT>(lParam);
+            SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pCreateStruct->lpCreateParams));
+        }
+        return 0;
+
         case WM_SIZE:
             //Display::Resize((UINT)(UINT64)lParam & 0xFFFF, (UINT)(UINT64)lParam >> 16);
             break;
 
         case WM_DESTROY:
             PostQuitMessage(0);
-            break;
+            return 0;
 
-        default:
-            return DefWindowProc(hWnd, message, wParam, lParam);
+        case WM_PAINT:
+            if (pSample)
+            {
+                pSample->OnUpdate();
+                pSample->OnRender();
+            }
+            return 0;
         }
+        return DefWindowProc(hWnd, message, wParam, lParam);
 
-        return 0;
     }
 }

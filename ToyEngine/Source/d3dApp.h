@@ -21,7 +21,6 @@ namespace GameCore
 		D3DApp(HINSTANCE hInstance);
 		virtual ~D3DApp();
 
-		
 
 		// Accessors.
 		UINT GetWidth() const { return m_DisplayWidth; }
@@ -73,8 +72,8 @@ namespace GameCore
 		int m_DisplayHeight;
 
 		// Pipeline objects.
-		D3D12_VIEWPORT m_viewport;
-		D3D12_RECT m_scissorRect;
+		CD3DX12_VIEWPORT m_viewport;
+		CD3DX12_RECT m_scissorRect;
 		ComPtr<IDXGISwapChain3> m_swapChain;
 		ComPtr<ID3D12Device> m_device;
 		ComPtr<ID3D12Resource> m_renderTargets[FrameCount];
