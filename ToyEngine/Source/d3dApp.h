@@ -1,19 +1,39 @@
 #pragma once	
 
 #include "pch.h"
-#include "GameTimer.h"
+#include "../Util/StepTimer.h"
 #include "DXSampleHelper.h"
-
+#include "../Util/SimpleCamera.h"
 
 using namespace Microsoft::WRL;
 using namespace DirectX;
 
 namespace GameCore 
 {
-	struct Vertex
+	struct ConstantBufferPerObject {
+		XMFLOAT4X4 wvpMat;
+	};
+
+
+
+	struct VertexPosColor
 	{
-		XMFLOAT3 position;
-		XMFLOAT4 color;
+		DirectX::XMFLOAT3 pos;
+		DirectX::XMFLOAT4 color;
+		static const D3D12_INPUT_ELEMENT_DESC inputLayout[2];
+	};
+
+	struct ConstantBuffer
+	{
+		DirectX::XMMATRIX world;
+		DirectX::XMMATRIX view;
+		DirectX::XMMATRIX proj;
+	};
+
+	enum GraphicsRootParameters
+	{
+		Cbv,
+		GraphicsRootParametersCount
 	};
 
 	class D3DApp
@@ -32,34 +52,51 @@ namespace GameCore
 		int InitApplication(D3DApp& app, const wchar_t* className, HINSTANCE hInst, int nCmdShow);
 		int Run(D3DApp& app);
 
+		// Helper function
+		void SetCustomWindowText(LPCWSTR text);
+
 		virtual void OnInit();
-		virtual void OnUpdate() = 0;
+		virtual void OnUpdate();
 		virtual void OnRender() = 0;
 		virtual void OnDestroy() = 0;
 
+		// Samples override the event handlers to handle specific messages.
+		virtual void OnKeyDown(UINT8 /*key*/);
+		virtual void OnKeyUp(UINT8 /*key*/);
+
 	private:
 		static const UINT FrameCount = 2;
+		static const UINT ConstantBufferPerObjectAlignedSize = (sizeof(ConstantBufferPerObject) + 255) & ~255;
 		static HWND m_hWnd;
 
 		// App resources.
 		ComPtr<ID3D12Resource> m_vertexBuffer;
 		D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 
+		ComPtr<ID3D12Resource> m_indexBuffer;
+		D3D12_INDEX_BUFFER_VIEW m_indexBufferView;
+
 		// Synchronization objects.
 		UINT m_frameIndex;
 		HANDLE m_fenceEvent;
 		ComPtr<ID3D12Fence> m_fence;
-		UINT64 m_fenceValue;
+		UINT64 m_fenceValue[FrameCount];
 
 		float m_aspectRatio;
 
 		// Root assets path.
 		std::wstring m_assetsPath;
 	protected:
+
+		// object 
+		void InitObjects();
+		void UpdateCubes();
+
 		void LoadAssets();
 		void PopulateCommandList();
-		void WaitForPreviousFrame();
-		void CalculateFrameStats();
+		void WaitForGPU();
+		void MoveToNextFrame();
+		void UpdateConstantBuffers();
 
 		void GetHardwareAdapter(
 			_In_ IDXGIFactory1* pFactory,
@@ -78,17 +115,49 @@ namespace GameCore
 		ComPtr<IDXGISwapChain3> m_swapChain;
 		ComPtr<ID3D12Device> m_device;
 		ComPtr<ID3D12Resource> m_renderTargets[FrameCount];
-		ComPtr<ID3D12CommandAllocator> m_commandAllocator;
+		ComPtr<ID3D12CommandAllocator> m_commandAllocator[FrameCount];
 		ComPtr<ID3D12CommandQueue> m_commandQueue;
 		ComPtr<ID3D12RootSignature> m_rootSignature;
 		ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
+		ComPtr<ID3D12DescriptorHeap> m_cbvHeap;
 		ComPtr<ID3D12PipelineState> m_pipelineState;
 		ComPtr<ID3D12GraphicsCommandList> m_commandList;
 		UINT m_rtvDescriptorSize;
 
-		GameTimer m_Timer;
+		StepTimer m_Timer;
+		UINT m_frameCounter;
+
 		std::wstring m_MainWndCaption;
 		bool      m_AppPaused;       // if the application paused
+
+		SimpleCamera m_MainCamera;
+
+
+		/*Object decleration for testing*/
+#pragma region Object
+		ConstantBufferPerObject cbPerObject; // this is the constant buffer data we will send to the gpu
+		ID3D12Resource* constantBufferUploadHeaps[FrameCount]; // this is the memory on the gpu where constant buffers for each frame will be placed
+
+		UINT8* cbvGPUAddress[FrameCount]; // this is a pointer to each of the constant buffer resource heaps
+
+		XMFLOAT4X4 cameraProjMat; // this will store our projection matrix
+		XMFLOAT4X4 cameraViewMat; // this will store our view matrix
+
+		XMFLOAT4 cameraPosition; // this is our cameras position vector
+		XMFLOAT4 cameraTarget; // a vector describing the point in space our camera is looking at
+		XMFLOAT4 cameraUp; // the worlds up vector
+
+		XMFLOAT4X4 cube1WorldMat; // our first cubes world matrix (transformation matrix)
+		XMFLOAT4X4 cube1RotMat; // this will keep track of our rotation for the first cube
+		XMFLOAT4 cube1Position; // our first cubes position in space
+
+		XMFLOAT4X4 cube2WorldMat; // our first cubes world matrix (transformation matrix)
+		XMFLOAT4X4 cube2RotMat; // this will keep track of our rotation for the second cube
+		XMFLOAT4 cube2PositionOffset; // our second cube will rotate around the first cube, so this is the position offset from the first cube
+
+		int numCubeIndices; // the number of indices to draw the cube
+
+#pragma endregion Object
 	};
 
 

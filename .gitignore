@@ -8,6 +8,8 @@
 
 ToyEngine/*.vcxproj.*
 ToyEngine/*.vcxproj
+ToyEngine/packages.config
 ToyEngine/Intermediate
 Build/
+packages/
 *.sln
