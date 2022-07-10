@@ -76,6 +76,9 @@ namespace GameCore
 		ComPtr<ID3D12Resource> m_indexBuffer;
 		D3D12_INDEX_BUFFER_VIEW m_indexBufferView;
 
+		ComPtr<ID3D12Resource> m_depthStencilBuffer; // This is the memory for our depth buffer. it will also be used for a stencil buffer in a later tutorial
+		ComPtr<ID3D12DescriptorHeap> m_dsDescriptorHeap; // This is a heap for our depth/stencil buffer descriptor
+
 		// Synchronization objects.
 		UINT m_frameIndex;
 		HANDLE m_fenceEvent;

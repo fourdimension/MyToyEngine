@@ -73,15 +73,19 @@ namespace GameCore
 
         ASSERT_SUCCEEDED(m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_commandQueue)));
 
+        DXGI_SAMPLE_DESC sampleDesc = {};
+        sampleDesc.Count = 1; // multisample count (no multisampling, so we just put 1, since we still need 1 sample)
+
         // Describe and create the swap chain.
         DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
         swapChainDesc.BufferCount = FrameCount;
+
         swapChainDesc.Width = GetWidth();
         swapChainDesc.Height = GetHeight();
         swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
         swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-        swapChainDesc.SampleDesc.Count = 1;
+        swapChainDesc.SampleDesc = sampleDesc;
 
         ComPtr<IDXGISwapChain1> swapChain;
         ASSERT_SUCCEEDED(dxgiFactory->CreateSwapChainForHwnd(
@@ -110,6 +114,15 @@ namespace GameCore
             ASSERT_SUCCEEDED(m_device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_rtvHeap)));
 
             m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+        }
+
+        {
+            // create a depth stencil descriptor heap so we can get a pointer to the depth stencil buffer
+            D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
+            dsvHeapDesc.NumDescriptors = 1;
+            dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+            dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+            ASSERT_SUCCEEDED(m_device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_dsDescriptorHeap)));
         }
 
         {
@@ -142,9 +155,6 @@ namespace GameCore
             }
         }
 
-        // create a command list 
-        ASSERT_SUCCEEDED(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator[m_frameIndex].Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
-        
         // Create synchronization objects and wait until assets have been uploaded to the GPU.
         {
             // create the fences
@@ -182,7 +192,7 @@ namespace GameCore
 
         MoveToNextFrame();
 
-        m_MainCamera.Update(static_cast<float>(m_Timer.GetElapsedSeconds()));
+        //m_MainCamera.Update(static_cast<float>(m_Timer.GetElapsedSeconds()));
         UpdateConstantBuffers();
         //m_pCurrentFrameResource->UpdateConstantBuffers(m_MainCamera.GetViewMatrix(), m_MainCamera.GetProjectionMatrix(0.8f, m_aspectRatio));
     }
@@ -372,16 +382,22 @@ namespace GameCore
             psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
             psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
             psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-            psoDesc.DepthStencilState.DepthEnable = FALSE;
-            psoDesc.DepthStencilState.StencilEnable = FALSE;
+            /*psoDesc.DepthStencilState.DepthEnable = FALSE;
+            psoDesc.DepthStencilState.StencilEnable = FALSE;*/
+            psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT); // a default depth stencil state
             psoDesc.SampleMask = UINT_MAX;
             psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
             psoDesc.NumRenderTargets = 1;
             psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+            psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
             psoDesc.SampleDesc.Count = 1;
             ASSERT_SUCCEEDED(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
 
         }
+
+        // create a command list 
+        ASSERT_SUCCEEDED(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator[m_frameIndex].Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
+
             // Create the vertex buffer.
             {
                 // Define the geometry for a triangle.
@@ -397,43 +413,43 @@ namespace GameCore
                     { XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 1.0f, 1.0f) }*/
 
                     // front face
-        { {-0.5f,  0.5f, -0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
-        { { 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
-        { {-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
-        { { 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
+                    { {-0.5f,  0.5f, -0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
+                    { { 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
+                    { {-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
+                    { { 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
           
-        //{ right side face
-        { { 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
-        { { 0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
-        { { 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
-        { { 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
+                    //{ right side face
+                    { { 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
+                    { { 0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
+                    { { 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
+                    { { 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
           
-        //{ left side face
-        { {-0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
-        { {-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
-        { {-0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
-        { {-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
+                    //{ left side face
+                    { {-0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
+                    { {-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
+                    { {-0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
+                    { {-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
                                                         
-        //{ back face                                   
-        { { 0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
-        { {-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
-        { { 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
-        { {-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
+                    //{ back face                                   
+                    { { 0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
+                    { {-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
+                    { { 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
+                    { {-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
           
-        //{ top face
-        { {-0.5f,  0.5f, -0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
-        { {0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
-        { {0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
-        { {-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
+                    //{ top face
+                    { {-0.5f,  0.5f, -0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
+                    { {0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
+                    { {0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
+                    { {-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
           
-        //{ bottom face
-        { { 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
-        { {-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
-        { { 0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
-        { {-0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
-                };
+                    //{ bottom face
+                    { { 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
+                    { {-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
+                    { { 0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
+                    { {-0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
+                            };
 
-                const UINT vertexBufferSize = sizeof(VertexPosColor);
+                const UINT vertexBufferSize = sizeof(vertices);
 
                 // Note: using upload heaps to transfer static data like vert buffers is not 
                 // recommended. Every time the GPU needs it, the upload heap will be marshalled 
@@ -482,29 +498,29 @@ namespace GameCore
                 m_commandList->ResourceBarrier(1, &vResourceBarrier);
 
                 DWORD indices[] = {
-                    // ffront face
-          0, 1, 2, // first triangle
-          0, 3, 1, // second triangle
+                            // ffront face
+                  0, 1, 2, // first triangle
+                  0, 3, 1, // second triangle
 
-          // left face
-          4, 5, 6, // first triangle
-          4, 7, 5, // second triangle
+                  // left face
+                  4, 5, 6, // first triangle
+                  4, 7, 5, // second triangle
 
-          // right face
-          8, 9, 10, // first triangle
-          8, 11, 9, // second triangle
+                  // right face
+                  8, 9, 10, // first triangle
+                  8, 11, 9, // second triangle
 
-          // back face
-          12, 13, 14, // first triangle
-          12, 15, 13, // second triangle
+                  // back face
+                  12, 13, 14, // first triangle
+                  12, 15, 13, // second triangle
 
-          // top face
-          16, 17, 18, // first triangle
-          16, 19, 17, // second triangle
+                  // top face
+                  16, 17, 18, // first triangle
+                  16, 19, 17, // second triangle
 
-          // bottom face
-          20, 21, 22, // first triangle
-          20, 23, 21, // second triangle
+                  // bottom face
+                  20, 21, 22, // first triangle
+                  20, 23, 21, // second triangle
                 };
 
                 int iBufferSize = sizeof(indices);
@@ -526,7 +542,7 @@ namespace GameCore
 
                 ID3D12Resource* iBufferUploadHeap;
                 CD3DX12_HEAP_PROPERTIES iBufferHeapProp(D3D12_HEAP_TYPE_UPLOAD);
-                desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(vertices));
+                desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
                 m_device->CreateCommittedResource(
                     &iBufferHeapProp, // upload heap
                     D3D12_HEAP_FLAG_NONE, // no flags
@@ -546,30 +562,49 @@ namespace GameCore
                 // the upload heap to the default heap
                 UpdateSubresources(m_commandList.Get(), m_indexBuffer.Get(), iBufferUploadHeap, 0, 0, 1, &indexData);
 
-                //// Copy the triangle data to the vertex buffer.
-                //UINT8* pVertexDataBegin;
-                //CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
-                //ThrowIfFailed(m_vertexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin)));
-                //memcpy(pVertexDataBegin, vertices, sizeof(vertices));
-                //m_vertexBuffer->Unmap(0, nullptr);
+                auto iResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_indexBuffer.Get(),
+                    D3D12_RESOURCE_STATE_COPY_DEST,
+                    D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+                m_commandList->ResourceBarrier(1, &iResourceBarrier);
+                
 
                 // Initialize the vertex buffer view.
-                m_vertexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
+                m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
                 m_vertexBufferView.StrideInBytes = sizeof(VertexPosColor);
                 m_vertexBufferView.SizeInBytes = vertexBufferSize;
 
                 m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
                 m_indexBufferView.Format = DXGI_FORMAT_R32_UINT; // 32-bit unsigned integer (this is what a dword is, double word, a word is 2 bytes)
                 m_indexBufferView.SizeInBytes = iBufferSize;
+            
+
+                // Create the depth/stencil buffer
+
+               
+                D3D12_DEPTH_STENCIL_VIEW_DESC depthStencilDesc = {};
+                depthStencilDesc.Format = DXGI_FORMAT_D32_FLOAT;
+                depthStencilDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+                depthStencilDesc.Flags = D3D12_DSV_FLAG_NONE;
+
+                D3D12_CLEAR_VALUE depthOptimizedClearValue = {};
+                depthOptimizedClearValue.Format = DXGI_FORMAT_D32_FLOAT;
+                depthOptimizedClearValue.DepthStencil.Depth = 1.0f;
+                depthOptimizedClearValue.DepthStencil.Stencil = 0;
+
+                CD3DX12_HEAP_PROPERTIES dsBufferProp(D3D12_HEAP_TYPE_DEFAULT);
+                desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, static_cast<LONG>(GetWidth()), static_cast<LONG>(GetHeight()), 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+                m_device->CreateCommittedResource(
+                    &dsBufferProp,
+                    D3D12_HEAP_FLAG_NONE,
+                    &desc,
+                    D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                    &depthOptimizedClearValue,
+                    IID_PPV_ARGS(&m_depthStencilBuffer)
+                );
+                NAME_D3D12_OBJECT(m_depthStencilBuffer);
+
+                m_device->CreateDepthStencilView(m_depthStencilBuffer.Get(), &depthStencilDesc, m_dsDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
             }
-
-            auto iResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_indexBuffer.Get(), 
-                D3D12_RESOURCE_STATE_COPY_DEST, 
-                D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
-            m_commandList->ResourceBarrier(1, &iResourceBarrier);
-
-
-
             #pragma region CreateFrameResource
             {
                 // create the constant buffer resource heap
@@ -623,7 +658,44 @@ namespace GameCore
             // Wait for the command list to execute; we are reusing the same command 
             // list in our main loop but for now, we just want to wait for setup to 
             // complete before continuing.
-            WaitForGPU();
+            //WaitForGPU();
+
+            m_fenceValue[m_frameIndex]++;
+            ASSERT_SUCCEEDED(m_commandQueue->Signal(m_fence.Get(), m_fenceValue[m_frameIndex]));
+
+            // build projection and view matrix
+            XMMATRIX tmpMat = XMMatrixPerspectiveFovLH(45.0f * (3.14f / 180.0f), (float)GetWidth() / (float)GetHeight(), 0.1f, 1000.0f);
+            XMStoreFloat4x4(&cameraProjMat, tmpMat);
+
+            // set starting camera state
+            cameraPosition = XMFLOAT4(0.0f, 2.0f, -4.0f, 0.0f);
+            cameraTarget = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+            cameraUp = XMFLOAT4(0.0f, 1.0f, 0.0f, 0.0f);
+
+            // build view matrix
+            XMVECTOR cPos = XMLoadFloat4(&cameraPosition);
+            XMVECTOR cTarg = XMLoadFloat4(&cameraTarget);
+            XMVECTOR cUp = XMLoadFloat4(&cameraUp);
+            tmpMat = XMMatrixLookAtLH(cPos, cTarg, cUp);
+            XMStoreFloat4x4(&cameraViewMat, tmpMat);
+
+            // set starting cubes position
+            // first cube
+            cube1Position = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f); // set cube 1's position
+            XMVECTOR posVec = XMLoadFloat4(&cube1Position); // create xmvector for cube1's position
+
+            tmpMat = XMMatrixTranslationFromVector(posVec); // create translation matrix from cube1's position vector
+            XMStoreFloat4x4(&cube1RotMat, XMMatrixIdentity()); // initialize cube1's rotation matrix to identity matrix
+            XMStoreFloat4x4(&cube1WorldMat, tmpMat); // store cube1's world matrix
+
+            // second cube
+            cube2PositionOffset = XMFLOAT4(1.5f, 0.0f, 0.0f, 0.0f);
+            posVec = XMLoadFloat4(&cube2PositionOffset) + XMLoadFloat4(&cube1Position); // create xmvector for cube2's position
+                                                                                        // we are rotating around cube1 here, so add cube2's position to cube1
+
+            tmpMat = XMMatrixTranslationFromVector(posVec); // create translation matrix from cube2's position offset vector
+            XMStoreFloat4x4(&cube2RotMat, XMMatrixIdentity()); // initialize cube2's rotation matrix to identity matrix
+            XMStoreFloat4x4(&cube2WorldMat, tmpMat); // store cube2's world matrix
     }
 
     void D3DApp::PopulateCommandList()
@@ -648,11 +720,17 @@ namespace GameCore
         m_commandList->ResourceBarrier(1, &barrier);
 
         CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex, m_rtvDescriptorSize);
-        m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+        CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_dsDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+
+        m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
         // Record commands.
         const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
         m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+
+        // clear the depth/stencil buffer
+        m_commandList->ClearDepthStencilView(m_dsDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+
         m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
         m_commandList->IASetIndexBuffer(&m_indexBufferView);
@@ -687,14 +765,16 @@ namespace GameCore
         // sample illustrates how to use fences for efficient resource usage and to
         // maximize GPU utilization.
 
+        //m_fenceValue[m_frameIndex]++;
+
         // Signal and increment the fence value.
         ASSERT_SUCCEEDED((m_commandQueue->Signal(m_fence.Get(), m_fenceValue[m_frameIndex])));
 
-        // Wait until the previous frame is finished.
-        ThrowIfFailed(m_fence->SetEventOnCompletion(m_fenceValue[m_frameIndex], m_fenceEvent));
-        WaitForSingleObjectEx(m_fenceEvent, INFINITE, FALSE);
+        //// Wait until the previous frame is finished.
+        //ThrowIfFailed(m_fence->SetEventOnCompletion(m_fenceValue[m_frameIndex], m_fenceEvent));
+        //WaitForSingleObjectEx(m_fenceEvent, INFINITE, FALSE);
 
-        m_fenceValue[m_frameIndex]++;
+        
     }
 
     void D3DApp::MoveToNextFrame()

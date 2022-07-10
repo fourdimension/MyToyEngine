@@ -20,8 +20,8 @@ VS_OUTPUT VSMain(VS_INPUT input)
 {
     VS_OUTPUT result;
 
-    //result.pos = mul(input.pos, wvpMat);
-    result.pos = input.pos;
+    result.pos = mul(input.pos, wvpMat);
+    //result.pos = input.pos;
     result.color = input.color;
 
     return result;

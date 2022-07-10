@@ -39,7 +39,7 @@ namespace GameCore
 		PIXEndEvent(m_commandQueue.Get());
 
 		// Present the frame.
-		ASSERT_SUCCEEDED(m_swapChain->Present(1, 0));
+		ASSERT_SUCCEEDED(m_swapChain->Present(0, 0));
 
 		D3DApp::WaitForGPU();
 	}
