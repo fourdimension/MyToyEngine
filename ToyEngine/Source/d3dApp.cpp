@@ -21,7 +21,13 @@ namespace GameCore
         GetAssetsPath(assetsPath, _countof(assetsPath)); // How to get path??
         m_assetsPath = assetsPath;
 
-        m_aspectRatio = static_cast<float>(m_DisplayWidth) / static_cast<float>(m_DisplayHeight);;
+        m_aspectRatio = static_cast<float>(m_DisplayWidth) / static_cast<float>(m_DisplayHeight);
+
+        // Testing constant roots
+        m_rootConstants.x = 1.1f;
+        m_rootConstants.y = 1.1f;
+        m_rootConstants.z = 1.1f;
+        m_rootConstants.w = 1.1f;
     }
 
     D3DApp::~D3DApp()
@@ -192,9 +198,9 @@ namespace GameCore
 
         MoveToNextFrame();
 
-        //m_MainCamera.Update(static_cast<float>(m_Timer.GetElapsedSeconds()));
+        m_MainCamera.Update(static_cast<float>(m_Timer.GetElapsedSeconds()));
         UpdateConstantBuffers();
-        //m_pCurrentFrameResource->UpdateConstantBuffers(m_MainCamera.GetViewMatrix(), m_MainCamera.GetProjectionMatrix(0.8f, m_aspectRatio));
+        //UpdateConstantBuffers(m_MainCamera.GetViewMatrix(), m_MainCamera.GetProjectionMatrix(0.8f, m_aspectRatio));
     }
 
     void D3DApp::OnKeyDown(UINT8 key)
@@ -312,19 +318,14 @@ namespace GameCore
             }
             
 #pragma region RootSignature
-            // create a root descriptor, which explains where to find the data for this root parameter
-            D3D12_ROOT_DESCRIPTOR rootCBVDescriptor;
-            rootCBVDescriptor.RegisterSpace = 0;
-            rootCBVDescriptor.ShaderRegister = 0;
-
             // create a root parameter and fill it out
-            D3D12_ROOT_PARAMETER  rootParameters[1]; // only one parameter right now
-            rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // this is a constant buffer view root descriptor
-            rootParameters[0].Descriptor = rootCBVDescriptor; // this is the root descriptor for this root parameter
-            rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX; // our pixel shader will be the only shader accessing this parameter for now
+            CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+            rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
+            rootParameters[1].InitAsConstants(4, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+            
 
-            CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
-            rootSignatureDesc.Init(_countof(rootParameters), // we have 1 root parameter
+            CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+            rootSignatureDesc.Init_1_1(_countof(rootParameters),
                 rootParameters, // a pointer to the beginning of our root parameters array
                 0,
                 nullptr,
@@ -334,9 +335,10 @@ namespace GameCore
                 D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
                 D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS);
 
-            ID3DBlob* signature;
-            ASSERT_SUCCEEDED(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, nullptr));
+            ComPtr<ID3DBlob> signature;
+            ComPtr<ID3DBlob> error;
 
+            ASSERT_SUCCEEDED(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
             ASSERT_SUCCEEDED(m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
 
 #pragma endregion RootSignature
@@ -735,6 +737,9 @@ namespace GameCore
         m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
         m_commandList->IASetIndexBuffer(&m_indexBufferView);
 
+        // set constant root (camera parameter)
+        m_commandList->SetGraphicsRoot32BitConstants(1, 4, reinterpret_cast<void*>(&m_rootConstants), 0);
+
         // set cube1's constant buffer
         m_commandList->SetGraphicsRootConstantBufferView(0, constantBufferUploadHeaps[m_frameIndex]->GetGPUVirtualAddress());
 
@@ -916,7 +921,7 @@ namespace GameCore
             nullptr,
             nullptr,
             hInst,
-            nullptr);
+            &app);
 
         ASSERT(m_hWnd != 0);
 
@@ -988,7 +993,6 @@ namespace GameCore
                 app->OnKeyUp(static_cast<UINT8>(wParam));
             }
             return 0;
-
 
         case WM_DESTROY:
             PostQuitMessage(0);

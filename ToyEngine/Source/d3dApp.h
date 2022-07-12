@@ -14,6 +14,13 @@ namespace GameCore
 		XMFLOAT4X4 wvpMat;
 	};
 
+	struct RootConstants
+	{
+		float x;
+		float y;
+		float z;
+		float w;
+	};
 
 
 	struct VertexPosColor
@@ -138,6 +145,8 @@ namespace GameCore
 
 		/*Object decleration for testing*/
 #pragma region Object
+		RootConstants m_rootConstants;    // Constants for the compute shader.
+
 		ConstantBufferPerObject cbPerObject; // this is the constant buffer data we will send to the gpu
 		ID3D12Resource* constantBufferUploadHeaps[FrameCount]; // this is the memory on the gpu where constant buffers for each frame will be placed
 

@@ -10,6 +10,8 @@ ToyEngine/*.vcxproj.*
 ToyEngine/*.vcxproj
 ToyEngine/packages.config
 ToyEngine/Intermediate
+ToyEngine/WinPixEventRuntime.dll
 Build/
 packages/
 *.sln
+*.exe
