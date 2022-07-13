@@ -18,15 +18,18 @@ class SimpleCamera
 public:
     SimpleCamera();
 
-    void Init(XMFLOAT3 position);
+    void Init(XMFLOAT3 position, float aspectRatio, UINT offset = 0);
     void Update(float elapsedSeconds);
     XMMATRIX GetViewMatrix();
-    XMMATRIX GetProjectionMatrix(float fov, float aspectRatio, float nearPlane = 1.0f, float farPlane = 1000.0f);
+    XMMATRIX GetProjectionMatrix(float nearPlane = 0.1f, float farPlane = 1000.0f);
+    XMMATRIX GetViewProjectionMatrix();
     void SetMoveSpeed(float unitsPerSecond);
     void SetTurnSpeed(float radiansPerSecond);
 
     void OnKeyDown(WPARAM key);
     void OnKeyUp(WPARAM key);
+
+    UINT GetOffsetInConstantBuffer() const;
 
 private:
     void Reset();
@@ -44,6 +47,9 @@ private:
         bool down;
     };
 
+    float m_fov;
+    float m_aspectRatio;
+
     XMFLOAT3 m_initialPosition;
     XMFLOAT3 m_position;
     float m_yaw;                // Relative to the +z axis.
@@ -52,6 +58,8 @@ private:
     XMFLOAT3 m_upDirection;
     float m_moveSpeed;            // Speed at which the camera moves, in units per second.
     float m_turnSpeed;            // Speed at which the camera turns, in radians per second.
+
+    UINT m_offsetInBuffer;    // offset in constant buffer memory
 
     KeysPressed m_keysPressed;
 };

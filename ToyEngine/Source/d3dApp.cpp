@@ -21,13 +21,6 @@ namespace GameCore
         GetAssetsPath(assetsPath, _countof(assetsPath)); // How to get path??
         m_assetsPath = assetsPath;
 
-        m_aspectRatio = static_cast<float>(m_DisplayWidth) / static_cast<float>(m_DisplayHeight);
-
-        // Testing constant roots
-        m_rootConstants.x = 1.1f;
-        m_rootConstants.y = 1.1f;
-        m_rootConstants.z = 1.1f;
-        m_rootConstants.w = 1.1f;
     }
 
     D3DApp::~D3DApp()
@@ -199,6 +192,10 @@ namespace GameCore
         MoveToNextFrame();
 
         m_MainCamera.Update(static_cast<float>(m_Timer.GetElapsedSeconds()));
+        XMStoreFloat4x4(&camMatrix.vpMat, XMMatrixTranspose(m_MainCamera.GetViewProjectionMatrix()));
+        // copy our camera ConstantBuffer instance to the mapped constant buffer resource
+        memcpy(cbvGPUAddress[m_frameIndex] + m_MainCamera.GetOffsetInConstantBuffer(), &camMatrix, sizeof(camMatrix));
+
         UpdateConstantBuffers();
         //UpdateConstantBuffers(m_MainCamera.GetViewMatrix(), m_MainCamera.GetProjectionMatrix(0.8f, m_aspectRatio));
     }
@@ -217,7 +214,7 @@ namespace GameCore
     {
         // set starting cubes position
         // first cube
-        cube1Position = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f); // set cube 1's position
+        cube1Position = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f); // set cube 1's position
         XMVECTOR posVec = XMLoadFloat4(&cube1Position); // create xmvector for cube1's position
 
         XMMATRIX tmpMat = XMMatrixTranslationFromVector(posVec); // create translation matrix from cube1's position vector
@@ -239,9 +236,9 @@ namespace GameCore
         // update app logic, such as moving the camera or figuring out what objects are in view
 
     // create rotation matrices
-        XMMATRIX rotXMat = XMMatrixRotationX(0.0001f);
-        XMMATRIX rotYMat = XMMatrixRotationY(0.0002f);
-        XMMATRIX rotZMat = XMMatrixRotationZ(0.0003f);
+        XMMATRIX rotXMat = XMMatrixRotationX(0.0000f);
+        XMMATRIX rotYMat = XMMatrixRotationY(0.0000f);
+        XMMATRIX rotZMat = XMMatrixRotationZ(0.0000f);
 
         // add rotation to cube1's rotation matrix and store it
         XMMATRIX rotMat = XMLoadFloat4x4(&cube1RotMat) * rotXMat * rotYMat * rotZMat;
@@ -258,9 +255,7 @@ namespace GameCore
 
         // update constant buffer for cube1
         // create the wvp matrix and store in constant buffer
-        XMMATRIX viewMat = XMLoadFloat4x4(&cameraViewMat); // load view matrix
-        XMMATRIX projMat = XMLoadFloat4x4(&cameraProjMat); // load projection matrix
-        XMMATRIX wvpMat = XMLoadFloat4x4(&cube1WorldMat) * viewMat * projMat; // create wvp matrix
+        XMMATRIX wvpMat = XMLoadFloat4x4(&cube1WorldMat); // create wvp matrix
         XMMATRIX transposed = XMMatrixTranspose(wvpMat); // must transpose wvp matrix for the gpu
         XMStoreFloat4x4(&cbPerObject.wvpMat, transposed); // store transposed wvp matrix in constant buffer
 
@@ -269,9 +264,9 @@ namespace GameCore
 
         // now do cube2's world matrix
         // create rotation matrices for cube2
-        rotXMat = XMMatrixRotationX(0.0003f);
-        rotYMat = XMMatrixRotationY(0.0002f);
-        rotZMat = XMMatrixRotationZ(0.0001f);
+        rotXMat = XMMatrixRotationX(0.0000f);
+        rotYMat = XMMatrixRotationY(0.0000f);
+        rotZMat = XMMatrixRotationZ(0.0000f);
 
         // add rotation to cube2's rotation matrix and store it
         rotMat = rotZMat * (XMLoadFloat4x4(&cube2RotMat) * (rotXMat * rotYMat));
@@ -290,7 +285,7 @@ namespace GameCore
         // finally we move it to cube 1's position, which will cause it to rotate around cube 1
         worldMat = scaleMat * translationOffsetMat * rotMat * translationMat;
 
-        wvpMat = XMLoadFloat4x4(&cube2WorldMat) * viewMat * projMat; // create wvp matrix
+        wvpMat = XMLoadFloat4x4(&cube2WorldMat); // create wvp matrix
         transposed = XMMatrixTranspose(wvpMat); // must transpose wvp matrix for the gpu
         XMStoreFloat4x4(&cbPerObject.wvpMat, transposed); // store transposed wvp matrix in constant buffer
 
@@ -321,7 +316,7 @@ namespace GameCore
             // create a root parameter and fill it out
             CD3DX12_ROOT_PARAMETER1 rootParameters[2];
             rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
-            rootParameters[1].InitAsConstants(4, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+            rootParameters[1].InitAsConstantBufferView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
             
 
             CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
@@ -665,28 +660,12 @@ namespace GameCore
             m_fenceValue[m_frameIndex]++;
             ASSERT_SUCCEEDED(m_commandQueue->Signal(m_fence.Get(), m_fenceValue[m_frameIndex]));
 
-            // build projection and view matrix
-            XMMATRIX tmpMat = XMMatrixPerspectiveFovLH(45.0f * (3.14f / 180.0f), (float)GetWidth() / (float)GetHeight(), 0.1f, 1000.0f);
-            XMStoreFloat4x4(&cameraProjMat, tmpMat);
-
-            // set starting camera state
-            cameraPosition = XMFLOAT4(0.0f, 2.0f, -4.0f, 0.0f);
-            cameraTarget = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
-            cameraUp = XMFLOAT4(0.0f, 1.0f, 0.0f, 0.0f);
-
-            // build view matrix
-            XMVECTOR cPos = XMLoadFloat4(&cameraPosition);
-            XMVECTOR cTarg = XMLoadFloat4(&cameraTarget);
-            XMVECTOR cUp = XMLoadFloat4(&cameraUp);
-            tmpMat = XMMatrixLookAtLH(cPos, cTarg, cUp);
-            XMStoreFloat4x4(&cameraViewMat, tmpMat);
-
             // set starting cubes position
             // first cube
-            cube1Position = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f); // set cube 1's position
+            cube1Position = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f); // set cube 1's position
             XMVECTOR posVec = XMLoadFloat4(&cube1Position); // create xmvector for cube1's position
 
-            tmpMat = XMMatrixTranslationFromVector(posVec); // create translation matrix from cube1's position vector
+            XMMATRIX tmpMat = XMMatrixTranslationFromVector(posVec); // create translation matrix from cube1's position vector
             XMStoreFloat4x4(&cube1RotMat, XMMatrixIdentity()); // initialize cube1's rotation matrix to identity matrix
             XMStoreFloat4x4(&cube1WorldMat, tmpMat); // store cube1's world matrix
 
@@ -737,8 +716,8 @@ namespace GameCore
         m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
         m_commandList->IASetIndexBuffer(&m_indexBufferView);
 
-        // set constant root (camera parameter)
-        m_commandList->SetGraphicsRoot32BitConstants(1, 4, reinterpret_cast<void*>(&m_rootConstants), 0);
+        // set camera matrix in the constant buffer
+        m_commandList->SetGraphicsRootConstantBufferView(1, constantBufferUploadHeaps[m_frameIndex]->GetGPUVirtualAddress() + m_MainCamera.GetOffsetInConstantBuffer());
 
         // set cube1's constant buffer
         m_commandList->SetGraphicsRootConstantBufferView(0, constantBufferUploadHeaps[m_frameIndex]->GetGPUVirtualAddress());
@@ -945,7 +924,6 @@ namespace GameCore
                 DispatchMessage(&msg);
             }
             else {
-                m_Timer.Tick();
                 if (!m_AppPaused) {
                     //CalculateFrameStats();
                     app.OnUpdate();

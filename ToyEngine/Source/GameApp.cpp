@@ -15,7 +15,10 @@ namespace GameCore
 
 	void GameApp::OnInit()
 	{
-		m_MainCamera.Init({ 8, 8, 30 });
+		m_MainCamera.Init({ 8, 8, 30 },
+			static_cast<float>(GetWidth()) / static_cast<float>(GetHeight()),
+			ConstantBufferPerObjectAlignedSize * 2); // resolve it later
+
 		D3DApp::OnInit();
 		D3DApp::LoadAssets();
 

@@ -13,11 +13,12 @@
 #include "SimpleCamera.h"
 
 SimpleCamera::SimpleCamera():
-    m_initialPosition(0, 2, -4),
+    m_fov(0.8f),
+    m_initialPosition(0, 0, 0),
     m_position(m_initialPosition),
     m_yaw(XM_PI),
     m_pitch(0.0f),
-    m_lookDirection(0, -2, 4),
+    m_lookDirection(0, 0, -1),
     m_upDirection(0, 1, 0),
     m_moveSpeed(20.0f),
     m_turnSpeed(XM_PIDIV2),
@@ -25,9 +26,11 @@ SimpleCamera::SimpleCamera():
 {
 }
 
-void SimpleCamera::Init(XMFLOAT3 position)
+void SimpleCamera::Init(XMFLOAT3 position, float aspectRatio, UINT offset)
 {
     m_initialPosition = position;
+    m_aspectRatio = aspectRatio;
+    m_offsetInBuffer = offset;
     Reset();
 }
 
@@ -46,8 +49,7 @@ void SimpleCamera::Reset()
     m_position = m_initialPosition;
     m_yaw = XM_PI;
     m_pitch = 0.0f;
-    //m_lookDirection = { 0, 0, -1 };
-    m_lookDirection = { 0, -2, 4 };
+    m_lookDirection = { 0, 0, -1 };
 }
 
 void SimpleCamera::Update(float elapsedSeconds)
@@ -105,9 +107,20 @@ XMMATRIX SimpleCamera::GetViewMatrix()
     return XMMatrixLookToRH(XMLoadFloat3(&m_position), XMLoadFloat3(&m_lookDirection), XMLoadFloat3(&m_upDirection));
 }
 
-XMMATRIX SimpleCamera::GetProjectionMatrix(float fov, float aspectRatio, float nearPlane, float farPlane)
+XMMATRIX SimpleCamera::GetProjectionMatrix(float nearPlane, float farPlane)
 {
-    return XMMatrixPerspectiveFovRH(fov, aspectRatio, nearPlane, farPlane);
+    return XMMatrixPerspectiveFovRH(m_fov, m_aspectRatio, nearPlane, farPlane);
+}
+
+XMMATRIX SimpleCamera::GetViewProjectionMatrix()
+{
+    return GetViewMatrix() * GetProjectionMatrix();
+}
+
+
+UINT SimpleCamera::GetOffsetInConstantBuffer() const
+{
+    return m_offsetInBuffer;
 }
 
 void SimpleCamera::OnKeyDown(WPARAM key)
@@ -174,3 +187,5 @@ void SimpleCamera::OnKeyUp(WPARAM key)
         break;
     }
 }
+
+

@@ -14,33 +14,15 @@ namespace GameCore
 		XMFLOAT4X4 wvpMat;
 	};
 
-	struct RootConstants
-	{
-		float x;
-		float y;
-		float z;
-		float w;
+	struct CameraViewProjectionObject {
+		XMFLOAT4X4 vpMat;
 	};
-
 
 	struct VertexPosColor
 	{
 		DirectX::XMFLOAT3 pos;
 		DirectX::XMFLOAT4 color;
 		static const D3D12_INPUT_ELEMENT_DESC inputLayout[2];
-	};
-
-	struct ConstantBuffer
-	{
-		DirectX::XMMATRIX world;
-		DirectX::XMMATRIX view;
-		DirectX::XMMATRIX proj;
-	};
-
-	enum GraphicsRootParameters
-	{
-		Cbv,
-		GraphicsRootParametersCount
 	};
 
 	class D3DApp
@@ -71,9 +53,10 @@ namespace GameCore
 		virtual void OnKeyDown(UINT8 /*key*/);
 		virtual void OnKeyUp(UINT8 /*key*/);
 
+		static const UINT ConstantBufferPerObjectAlignedSize = (sizeof(ConstantBufferPerObject) + 255) & ~255;
 	private:
 		static const UINT FrameCount = 2;
-		static const UINT ConstantBufferPerObjectAlignedSize = (sizeof(ConstantBufferPerObject) + 255) & ~255;
+		
 		static HWND m_hWnd;
 
 		// App resources.
@@ -91,8 +74,6 @@ namespace GameCore
 		HANDLE m_fenceEvent;
 		ComPtr<ID3D12Fence> m_fence;
 		UINT64 m_fenceValue[FrameCount];
-
-		float m_aspectRatio;
 
 		// Root assets path.
 		std::wstring m_assetsPath;
@@ -145,19 +126,11 @@ namespace GameCore
 
 		/*Object decleration for testing*/
 #pragma region Object
-		RootConstants m_rootConstants;    // Constants for the compute shader.
-
 		ConstantBufferPerObject cbPerObject; // this is the constant buffer data we will send to the gpu
+		CameraViewProjectionObject camMatrix; // this is camera's constant buffer data we will send to the gpu
 		ID3D12Resource* constantBufferUploadHeaps[FrameCount]; // this is the memory on the gpu where constant buffers for each frame will be placed
 
 		UINT8* cbvGPUAddress[FrameCount]; // this is a pointer to each of the constant buffer resource heaps
-
-		XMFLOAT4X4 cameraProjMat; // this will store our projection matrix
-		XMFLOAT4X4 cameraViewMat; // this will store our view matrix
-
-		XMFLOAT4 cameraPosition; // this is our cameras position vector
-		XMFLOAT4 cameraTarget; // a vector describing the point in space our camera is looking at
-		XMFLOAT4 cameraUp; // the worlds up vector
 
 		XMFLOAT4X4 cube1WorldMat; // our first cubes world matrix (transformation matrix)
 		XMFLOAT4X4 cube1RotMat; // this will keep track of our rotation for the first cube
