@@ -44,7 +44,7 @@ namespace GameCore
 		// Present the frame.
 		ASSERT_SUCCEEDED(m_swapChain->Present(0, 0));
 
-		D3DApp::WaitForGPU();
+		D3DApp::MoveToNextFrame();
 	}
 
 	void GameApp::OnDestroy()

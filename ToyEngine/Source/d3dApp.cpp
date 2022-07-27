@@ -1,4 +1,5 @@
 #include "d3dApp.h"
+#include "DDSTextureLoader.h"
 #include <sstream>
 
 namespace GameCore 
@@ -116,6 +117,15 @@ namespace GameCore
         }
 
         {
+            // Describe and create a shader resource view (SRV) heap for the texture.
+            D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
+            srvHeapDesc.NumDescriptors = 1;
+            srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+            srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+            ThrowIfFailed(m_device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&m_srvHeap)));
+        }
+
+        {
             // create a depth stencil descriptor heap so we can get a pointer to the depth stencil buffer
             D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
             dsvHeapDesc.NumDescriptors = 1;
@@ -153,23 +163,6 @@ namespace GameCore
                 ASSERT_SUCCEEDED(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocator[i])));
             }
         }
-
-        // Create synchronization objects and wait until assets have been uploaded to the GPU.
-        {
-            // create the fences
-            for (int i = 0; i < FrameCount; i++)
-            {
-                ASSERT_SUCCEEDED(m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)));
-                m_fenceValue[i] = 0; // set the initial fence value to 0
-            }
-
-            // Create an event handle to use for frame synchronization.
-            m_fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-            if (m_fenceEvent == nullptr)
-            {
-                ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()));
-            }
-        }
     }
 
     void D3DApp::OnUpdate()
@@ -188,8 +181,6 @@ namespace GameCore
         m_frameCounter++;
 
         UpdateCubes();
-
-        MoveToNextFrame();
 
         m_MainCamera.Update(static_cast<float>(m_Timer.GetElapsedSeconds()));
         XMStoreFloat4x4(&camMatrix.vpMat, XMMatrixTranspose(m_MainCamera.GetViewProjectionMatrix()));
@@ -314,40 +305,48 @@ namespace GameCore
             
 #pragma region RootSignature
             // create a root parameter and fill it out
-            CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+            CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
+            ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+
+
+            CD3DX12_ROOT_PARAMETER1 rootParameters[3];
             rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
             rootParameters[1].InitAsConstantBufferView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
-            
+            rootParameters[2].InitAsDescriptorTable(1, ranges, D3D12_SHADER_VISIBILITY_PIXEL);
+
+            // Create a static sampler without the descriptor heap
+            D3D12_STATIC_SAMPLER_DESC sampler = {};
+            sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+            sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+            sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+            sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+            sampler.MipLODBias = 0;
+            sampler.MaxAnisotropy = 0;
+            sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+            sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+            sampler.MinLOD = 0.0f;
+            sampler.MaxLOD = D3D12_FLOAT32_MAX;
+            sampler.ShaderRegister = 0;
+            sampler.RegisterSpace = 0;
+            sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
             CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
             rootSignatureDesc.Init_1_1(_countof(rootParameters),
                 rootParameters, // a pointer to the beginning of our root parameters array
-                0,
-                nullptr,
+                1,
+                &sampler,
                 D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | // we can deny shader stages here for better performance
                 D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
                 D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-                D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-                D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS);
+                D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS);
 
             ComPtr<ID3DBlob> signature;
             ComPtr<ID3DBlob> error;
 
             ASSERT_SUCCEEDED(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
             ASSERT_SUCCEEDED(m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
-
-#pragma endregion RootSignature
-
-
-
-            /*CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
-            rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-
-            ComPtr<ID3DBlob> signature;
-            ComPtr<ID3DBlob> error;
-            ASSERT_SUCCEEDED(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
-            ASSERT_SUCCEEDED(m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));*/
         }
+#pragma endregion RootSignature
 
         // Create the pipeline state, which includes compiling and loading shaders.
         {
@@ -361,14 +360,15 @@ namespace GameCore
             UINT compileFlags = 0;
 #endif
 
-            ASSERT_SUCCEEDED(D3DCompileFromFile(L"Shaders\\VertexShader.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
-            ASSERT_SUCCEEDED(D3DCompileFromFile(L"Shaders\\PixelShader.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
+            ASSERT_SUCCEEDED(D3DCompileFromFile(L"Shaders\\Vertexshader.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
+            ASSERT_SUCCEEDED(D3DCompileFromFile(L"Shaders\\Pixelshader.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
 
             // Define the vertex input layout.
             D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
             {
                 { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-                { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+                //{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+                { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
             };
 
             // Describe and create the graphics pipeline state object (PSO).
@@ -395,288 +395,368 @@ namespace GameCore
         // create a command list 
         ASSERT_SUCCEEDED(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator[m_frameIndex].Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
 
-            // Create the vertex buffer.
+        // Create the vertex/index/depth buffer.
+        {
+            // Define the geometry for a triangle.
+            VertexPosColor vertices[] =
             {
-                // Define the geometry for a triangle.
-                VertexPosColor vertices[] =
-                {
-                    /*{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f) },
-                    { XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f) },
-                    { XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f) },
-                    { XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f) },
-                    { XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f) },
-                    { XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 1.0f, 1.0f) },
-                    { XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f) },
-                    { XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 1.0f, 1.0f) }*/
+                /*{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f) },
+                { XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f) },
+                { XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f) },
+                { XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f) },
+                { XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f) },
+                { XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 1.0f, 1.0f) },
+                { XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f) },
+                { XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 1.0f, 1.0f) }*/
 
-                    // front face
-                    { {-0.5f,  0.5f, -0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
-                    { { 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
-                    { {-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
-                    { { 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
+                // front face
+                { {-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f} },
+                { { 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f} },
+                { {-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f} },
+                { { 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f} },
           
-                    //{ right side face
-                    { { 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
-                    { { 0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
-                    { { 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
-                    { { 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
+                //{ right side face
+                { { 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f} },
+                { { 0.5f,  0.5f,  0.5f}, {1.0f, 0.0f} },
+                { { 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f} },
+                { { 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f} },
           
-                    //{ left side face
-                    { {-0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
-                    { {-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
-                    { {-0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
-                    { {-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
+                //{ left side face
+                { {-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f} },
+                { {-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f} },
+                { {-0.5f, -0.5f,  0.5f}, {0.0f, 0.0f} },
+                { {-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f} },
                                                         
-                    //{ back face                                   
-                    { { 0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
-                    { {-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
-                    { { 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
-                    { {-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
+                //{ back face                                   
+                { { 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f} },
+                { {-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f} },
+                { { 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f} },
+                { {-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f} },
           
-                    //{ top face
-                    { {-0.5f,  0.5f, -0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
-                    { {0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
-                    { {0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
-                    { {-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
+                //{ top face
+                { {-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f} },
+                { {0.5f,   0.5f,  0.5f}, {1.0f, 0.0f} },
+                { {0.5f,   0.5f, -0.5f}, {0.0f, 0.0f} },
+                { {-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f} },
           
-                    //{ bottom face
-                    { { 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f, 1.0f} },
-                    { {-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f, 1.0f} },
-                    { { 0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
-                    { {-0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f, 1.0f} },
-                            };
+                //{ bottom face
+                { { 0.5f, -0.5f,  0.5f}, {0.0f, 1.0f} },
+                { {-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f} },
+                { { 0.5f, -0.5f, -0.5f}, {0.0f, 0.0f} },
+                { {-0.5f, -0.5f,  0.5f}, {1.0f, 1.0f} },
+            };
 
-                const UINT vertexBufferSize = sizeof(vertices);
+            const UINT vertexBufferSize = sizeof(vertices);
 
-                // Note: using upload heaps to transfer static data like vert buffers is not 
-                // recommended. Every time the GPU needs it, the upload heap will be marshalled 
-                // over. Please read up on Default Heap usage. An upload heap is used here for 
-                // code simplicity and because there are very few verts to actually transfer.
+            // Note: using upload heaps to transfer static data like vert buffers is not 
+            // recommended. Every time the GPU needs it, the upload heap will be marshalled 
+            // over. Please read up on Default Heap usage. An upload heap is used here for 
+            // code simplicity and because there are very few verts to actually transfer.
 
-                CD3DX12_HEAP_PROPERTIES vBufferProps(D3D12_HEAP_TYPE_DEFAULT);
-                auto desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
-                ThrowIfFailed(m_device->CreateCommittedResource(
-                    &vBufferProps,
-                    D3D12_HEAP_FLAG_NONE,
-                    &desc,
-                    D3D12_RESOURCE_STATE_COPY_DEST,// we will start this heap in the copy destination state since we will copy data
-                                                   // from the upload heap to this heap
-                    nullptr,
-                    IID_PPV_ARGS(&m_vertexBuffer)));
+            CD3DX12_HEAP_PROPERTIES vBufferProps(D3D12_HEAP_TYPE_DEFAULT);
+            auto desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
+            ThrowIfFailed(m_device->CreateCommittedResource(
+                &vBufferProps,
+                D3D12_HEAP_FLAG_NONE,
+                &desc,
+                D3D12_RESOURCE_STATE_COPY_DEST,// we will start this heap in the copy destination state since we will copy data
+                                                // from the upload heap to this heap
+                nullptr,
+                IID_PPV_ARGS(&m_vertexBuffer)));
 
-                // we can give resource heaps a name so when we debug with the graphics debugger we know what resource we are looking at
-                m_vertexBuffer->SetName(L"Vertex Buffer Resource Heap");
+            // we can give resource heaps a name so when we debug with the graphics debugger we know what resource we are looking at
+            m_vertexBuffer->SetName(L"Vertex Buffer Resource Heap");
 
-                // create upload heap
-                // upload heaps are used to upload data to the GPU. CPU can write to it, GPU can read from it
-                // We will upload the vertex buffer using this heap to the default heap
-                ID3D12Resource* vBufferUploadHeap;
-                CD3DX12_HEAP_PROPERTIES vBufferHeapProp(D3D12_HEAP_TYPE_UPLOAD);
-                desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
-                m_device->CreateCommittedResource(
-                    &vBufferHeapProp, // upload heap
-                    D3D12_HEAP_FLAG_NONE, // no flags
-                    &desc, // resource description for a buffer
-                    D3D12_RESOURCE_STATE_GENERIC_READ, // GPU will read from this buffer and copy its contents to the default heap
-                    nullptr,
-                    IID_PPV_ARGS(&vBufferUploadHeap));
-                vBufferUploadHeap->SetName(L"Vertex Buffer Upload Resource Heap");
+            // create upload heap
+            // upload heaps are used to upload data to the GPU. CPU can write to it, GPU can read from it
+            // We will upload the vertex buffer using this heap to the default heap
+            ID3D12Resource* vBufferUploadHeap;
+            CD3DX12_HEAP_PROPERTIES vBufferHeapProp(D3D12_HEAP_TYPE_UPLOAD);
+            desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
+            m_device->CreateCommittedResource(
+                &vBufferHeapProp, // upload heap
+                D3D12_HEAP_FLAG_NONE, // no flags
+                &desc, // resource description for a buffer
+                D3D12_RESOURCE_STATE_GENERIC_READ, // GPU will read from this buffer and copy its contents to the default heap
+                nullptr,
+                IID_PPV_ARGS(&vBufferUploadHeap));
+            vBufferUploadHeap->SetName(L"Vertex Buffer Upload Resource Heap");
 
-                // store  ivertex buffern upload heap
-                D3D12_SUBRESOURCE_DATA vertexData = {};
-                vertexData.pData = reinterpret_cast<BYTE*>(vertices); // pointer to our vertex array
-                vertexData.RowPitch = vertexBufferSize; // size of all our triangle vertex data
-                vertexData.SlicePitch = vertexBufferSize; // also the size of our triangle vertex data
+            // store  ivertex buffern upload heap
+            D3D12_SUBRESOURCE_DATA vertexData = {};
+            vertexData.pData = reinterpret_cast<BYTE*>(vertices); // pointer to our vertex array
+            vertexData.RowPitch = vertexBufferSize; // size of all our triangle vertex data
+            vertexData.SlicePitch = vertexBufferSize; // also the size of our triangle vertex data
 
-                UpdateSubresources(m_commandList.Get(), m_vertexBuffer.Get(), vBufferUploadHeap, 0, 0, 1, &vertexData);
+            UpdateSubresources(m_commandList.Get(), m_vertexBuffer.Get(), vBufferUploadHeap, 0, 0, 1, &vertexData);
 
-                // transition the vertex buffer data from copy destination state to vertex buffer state
-                auto vResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_vertexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
-                m_commandList->ResourceBarrier(1, &vResourceBarrier);
+            // transition the vertex buffer data from copy destination state to vertex buffer state
+            auto vResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_vertexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+            m_commandList->ResourceBarrier(1, &vResourceBarrier);
 
-                DWORD indices[] = {
-                            // ffront face
-                  0, 1, 2, // first triangle
-                  0, 3, 1, // second triangle
+            DWORD indices[] = {
+                        // ffront face
+                0, 1, 2, // first triangle
+                0, 3, 1, // second triangle
 
-                  // left face
-                  4, 5, 6, // first triangle
-                  4, 7, 5, // second triangle
+                // left face
+                4, 5, 6, // first triangle
+                4, 7, 5, // second triangle
 
-                  // right face
-                  8, 9, 10, // first triangle
-                  8, 11, 9, // second triangle
+                // right face
+                8, 9, 10, // first triangle
+                8, 11, 9, // second triangle
 
-                  // back face
-                  12, 13, 14, // first triangle
-                  12, 15, 13, // second triangle
+                // back face
+                12, 13, 14, // first triangle
+                12, 15, 13, // second triangle
 
-                  // top face
-                  16, 17, 18, // first triangle
-                  16, 19, 17, // second triangle
+                // top face
+                16, 17, 18, // first triangle
+                16, 19, 17, // second triangle
 
-                  // bottom face
-                  20, 21, 22, // first triangle
-                  20, 23, 21, // second triangle
-                };
+                // bottom face
+                20, 21, 22, // first triangle
+                20, 23, 21, // second triangle
+            };
 
-                int iBufferSize = sizeof(indices);
+            int iBufferSize = sizeof(indices);
 
-                numCubeIndices = iBufferSize / sizeof(DWORD);
+            numCubeIndices = iBufferSize / sizeof(DWORD);
 
-                CD3DX12_HEAP_PROPERTIES iBufferProp(D3D12_HEAP_TYPE_DEFAULT);
-                desc = CD3DX12_RESOURCE_DESC::Buffer(iBufferSize);
-                // create default heap to hold index buffer
-                m_device->CreateCommittedResource(
-                    &iBufferProp, // a default heap
-                    D3D12_HEAP_FLAG_NONE, // no flags
-                    &desc, // resource description for a buffer
-                    D3D12_RESOURCE_STATE_COPY_DEST, // start in the copy destination state
-                    nullptr, // optimized clear value must be null for this type of resource
-                    IID_PPV_ARGS(&m_indexBuffer));
+            CD3DX12_HEAP_PROPERTIES iBufferProp(D3D12_HEAP_TYPE_DEFAULT);
+            desc = CD3DX12_RESOURCE_DESC::Buffer(iBufferSize);
+            // create default heap to hold index buffer
+            m_device->CreateCommittedResource(
+                &iBufferProp, // a default heap
+                D3D12_HEAP_FLAG_NONE, // no flags
+                &desc, // resource description for a buffer
+                D3D12_RESOURCE_STATE_COPY_DEST, // start in the copy destination state
+                nullptr, // optimized clear value must be null for this type of resource
+                IID_PPV_ARGS(&m_indexBuffer));
 
-                m_indexBuffer->SetName(L"Index Buffer Resource Heap");
+            m_indexBuffer->SetName(L"Index Buffer Resource Heap");
 
-                ID3D12Resource* iBufferUploadHeap;
-                CD3DX12_HEAP_PROPERTIES iBufferHeapProp(D3D12_HEAP_TYPE_UPLOAD);
-                desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
-                m_device->CreateCommittedResource(
-                    &iBufferHeapProp, // upload heap
-                    D3D12_HEAP_FLAG_NONE, // no flags
-                    &desc, // resource description for a buffer
-                    D3D12_RESOURCE_STATE_GENERIC_READ, // GPU will read from this buffer and copy its contents to the default heap
-                    nullptr,
-                    IID_PPV_ARGS(&iBufferUploadHeap));
-                vBufferUploadHeap->SetName(L"Index Buffer Upload Resource Heap");
+            ID3D12Resource* iBufferUploadHeap;
+            CD3DX12_HEAP_PROPERTIES iBufferHeapProp(D3D12_HEAP_TYPE_UPLOAD);
+            desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
+            m_device->CreateCommittedResource(
+                &iBufferHeapProp, // upload heap
+                D3D12_HEAP_FLAG_NONE, // no flags
+                &desc, // resource description for a buffer
+                D3D12_RESOURCE_STATE_GENERIC_READ, // GPU will read from this buffer and copy its contents to the default heap
+                nullptr,
+                IID_PPV_ARGS(&iBufferUploadHeap));
+            vBufferUploadHeap->SetName(L"Index Buffer Upload Resource Heap");
 
-                // store vertex buffer in upload heap
-                D3D12_SUBRESOURCE_DATA indexData = {};
-                indexData.pData = reinterpret_cast<BYTE*>(indices); // pointer to our index array
-                indexData.RowPitch = iBufferSize; // size of all our index buffer
-                indexData.SlicePitch = iBufferSize; // also the size of our index buffer
+            // store vertex buffer in upload heap
+            D3D12_SUBRESOURCE_DATA indexData = {};
+            indexData.pData = reinterpret_cast<BYTE*>(indices); // pointer to our index array
+            indexData.RowPitch = iBufferSize; // size of all our index buffer
+            indexData.SlicePitch = iBufferSize; // also the size of our index buffer
 
-                // we are now creating a command with the command list to copy the data from
-                // the upload heap to the default heap
-                UpdateSubresources(m_commandList.Get(), m_indexBuffer.Get(), iBufferUploadHeap, 0, 0, 1, &indexData);
+            // we are now creating a command with the command list to copy the data from
+            // the upload heap to the default heap
+            UpdateSubresources(m_commandList.Get(), m_indexBuffer.Get(), iBufferUploadHeap, 0, 0, 1, &indexData);
 
-                auto iResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_indexBuffer.Get(),
-                    D3D12_RESOURCE_STATE_COPY_DEST,
-                    D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
-                m_commandList->ResourceBarrier(1, &iResourceBarrier);
+            auto iResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_indexBuffer.Get(),
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+            m_commandList->ResourceBarrier(1, &iResourceBarrier);
                 
 
-                // Initialize the vertex buffer view.
-                m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-                m_vertexBufferView.StrideInBytes = sizeof(VertexPosColor);
-                m_vertexBufferView.SizeInBytes = vertexBufferSize;
+            // Initialize the vertex buffer view.
+            m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
+            m_vertexBufferView.StrideInBytes = sizeof(VertexPosColor);
+            m_vertexBufferView.SizeInBytes = vertexBufferSize;
 
-                m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
-                m_indexBufferView.Format = DXGI_FORMAT_R32_UINT; // 32-bit unsigned integer (this is what a dword is, double word, a word is 2 bytes)
-                m_indexBufferView.SizeInBytes = iBufferSize;
-            
+            m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
+            m_indexBufferView.Format = DXGI_FORMAT_R32_UINT; // 32-bit unsigned integer (this is what a dword is, double word, a word is 2 bytes)
+            m_indexBufferView.SizeInBytes = iBufferSize;
+        }
 
-                // Create the depth/stencil buffer
+        // Create the depth/stencil buffer
+        {
+            D3D12_DEPTH_STENCIL_VIEW_DESC depthStencilDesc = {};
+            depthStencilDesc.Format = DXGI_FORMAT_D32_FLOAT;
+            depthStencilDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+            depthStencilDesc.Flags = D3D12_DSV_FLAG_NONE;
 
-               
-                D3D12_DEPTH_STENCIL_VIEW_DESC depthStencilDesc = {};
-                depthStencilDesc.Format = DXGI_FORMAT_D32_FLOAT;
-                depthStencilDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-                depthStencilDesc.Flags = D3D12_DSV_FLAG_NONE;
+            D3D12_CLEAR_VALUE depthOptimizedClearValue = {};
+            depthOptimizedClearValue.Format = DXGI_FORMAT_D32_FLOAT;
+            depthOptimizedClearValue.DepthStencil.Depth = 1.0f;
+            depthOptimizedClearValue.DepthStencil.Stencil = 0;
 
-                D3D12_CLEAR_VALUE depthOptimizedClearValue = {};
-                depthOptimizedClearValue.Format = DXGI_FORMAT_D32_FLOAT;
-                depthOptimizedClearValue.DepthStencil.Depth = 1.0f;
-                depthOptimizedClearValue.DepthStencil.Stencil = 0;
+            CD3DX12_HEAP_PROPERTIES dsBufferProp(D3D12_HEAP_TYPE_DEFAULT);
+            auto desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, static_cast<LONG>(GetWidth()), static_cast<LONG>(GetHeight()), 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+            m_device->CreateCommittedResource(
+                &dsBufferProp,
+                D3D12_HEAP_FLAG_NONE,
+                &desc,
+                D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                &depthOptimizedClearValue,
+                IID_PPV_ARGS(&m_depthStencilBuffer)
+            );
+            NAME_D3D12_OBJECT(m_depthStencilBuffer);
 
-                CD3DX12_HEAP_PROPERTIES dsBufferProp(D3D12_HEAP_TYPE_DEFAULT);
-                desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, static_cast<LONG>(GetWidth()), static_cast<LONG>(GetHeight()), 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
-                m_device->CreateCommittedResource(
-                    &dsBufferProp,
-                    D3D12_HEAP_FLAG_NONE,
-                    &desc,
-                    D3D12_RESOURCE_STATE_DEPTH_WRITE,
-                    &depthOptimizedClearValue,
-                    IID_PPV_ARGS(&m_depthStencilBuffer)
-                );
-                NAME_D3D12_OBJECT(m_depthStencilBuffer);
+            m_device->CreateDepthStencilView(m_depthStencilBuffer.Get(), &depthStencilDesc, m_dsDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+        }
 
-                m_device->CreateDepthStencilView(m_depthStencilBuffer.Get(), &depthStencilDesc, m_dsDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
-            }
-            #pragma region CreateFrameResource
+        // Note: ComPtr's are CPU objects but this resource needs to stay in scope until
+        // the command list that references it has finished executing on the GPU.
+        // We will flush the GPU at the end of this method to ensure the resource is not
+        // prematurely destroyed.
+        ComPtr<ID3D12Resource> textureUploadHeap;
+
+        // Create the texture.
+        {
+            // Copy data to the intermediate upload heap and then schedule a copy 
+            // from the upload heap to the Texture2D.
+            //std::vector<UINT8> texture = GenerateTextureData();
+            std::unique_ptr<uint8_t[]> ddsData;
+            CreateDDSTextureFromFile(m_device.Get(), L"Assets/seafloor.dds", 0u, false, m_texture.ReleaseAndGetAddressOf(), m_srvHeap->GetCPUDescriptorHandleForHeapStart(), ddsData);
+
+            // Describe and create a Texture2D.
+            D3D12_RESOURCE_DESC textureDesc = {};
+            textureDesc.MipLevels = 1;
+            textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            textureDesc.Width = m_texture.Get()->GetDesc().Width;
+            textureDesc.Height = m_texture.Get()->GetDesc().Height;
+            textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+            textureDesc.DepthOrArraySize = 1;
+            textureDesc.SampleDesc.Count = 1;
+            textureDesc.SampleDesc.Quality = 0;
+            textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+
+            CD3DX12_HEAP_PROPERTIES texBufferProp(D3D12_HEAP_TYPE_DEFAULT);
+
+            ThrowIfFailed(m_device->CreateCommittedResource(
+                &texBufferProp,
+                D3D12_HEAP_FLAG_NONE,
+                &textureDesc,
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                nullptr,
+                IID_PPV_ARGS(&m_texture)));
+
+            NAME_D3D12_OBJECT(m_texture);
+
+            const UINT64 uploadBufferSize = GetRequiredIntermediateSize(m_texture.Get(), 0, 1);
+
+            // Create the GPU upload buffer.
+            CD3DX12_HEAP_PROPERTIES texheapBufferProp(D3D12_HEAP_TYPE_UPLOAD);
+            auto desc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
+
+            ThrowIfFailed(m_device->CreateCommittedResource(
+                &texheapBufferProp,
+                D3D12_HEAP_FLAG_NONE,
+                &desc,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr,
+                IID_PPV_ARGS(&textureUploadHeap)));
+            NAME_D3D12_OBJECT(textureUploadHeap);
+
+            D3D12_SUBRESOURCE_DATA textureData = {};
+            textureData.pData = ddsData.get();
+            textureData.RowPitch = textureDesc.Width * 4;
+            textureData.SlicePitch = textureData.RowPitch * textureDesc.Height;
+
+            UpdateSubresources(m_commandList.Get(), m_texture.Get(), textureUploadHeap.Get(), 0, 0, 1, &textureData);
+
+            auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_texture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            m_commandList->ResourceBarrier(1, &barrier);
+
+            // Describe and create a SRV for the texture.
+            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+            srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            srvDesc.Format = textureDesc.Format;
+            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            srvDesc.Texture2D.MipLevels = 1;
+            m_device->CreateShaderResourceView(m_texture.Get(), &srvDesc, m_srvHeap->GetCPUDescriptorHandleForHeapStart());
+        }
+
+        #pragma region CreateFrameResource
+        {
+            // create the constant buffer resource heap
+            // We will update the constant buffer one or more times per frame, so we will use only an upload heap
+            // unlike previously we used an upload heap to upload the vertex and index data, and then copied over
+            // to a default heap. If you plan to use a resource for more than a couple frames, it is usually more
+            // efficient to copy to a default heap where it stays on the gpu. In this case, our constant buffer
+            // will be modified and uploaded at least once per frame, so we only use an upload heap
+
+            // first we will create a resource heap (upload heap) for each frame for the cubes constant buffers
+            // As you can see, we are allocating 64KB for each resource we create. Buffer resource heaps must be
+            // an alignment of 64KB. We are creating 3 resources, one for each frame. Each constant buffer is 
+            // only a 4x4 matrix of floats in this tutorial. So with a float being 4 bytes, we have 
+            // 16 floats in one constant buffer, and we will store 2 constant buffers in each
+            // heap, one for each cube, thats only 64x2 bits, or 128 bits we are using for each
+            // resource, and each resource must be at least 64KB (65536 bits)
+            for (int i = 0; i < FrameCount; ++i)
             {
-                // create the constant buffer resource heap
-                // We will update the constant buffer one or more times per frame, so we will use only an upload heap
-                // unlike previously we used an upload heap to upload the vertex and index data, and then copied over
-                // to a default heap. If you plan to use a resource for more than a couple frames, it is usually more
-                // efficient to copy to a default heap where it stays on the gpu. In this case, our constant buffer
-                // will be modified and uploaded at least once per frame, so we only use an upload heap
+                CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
+                auto desc = CD3DX12_RESOURCE_DESC::Buffer(1024 * 64);
+                // create resource for cube 1
+                ASSERT_SUCCEEDED(m_device->CreateCommittedResource(
+                    &heapProps, // this heap will be used to upload the constant buffer data
+                    D3D12_HEAP_FLAG_NONE, // no flags
+                    &desc, // size of the resource heap. Must be a multiple of 64KB for single-textures and constant buffers
+                    D3D12_RESOURCE_STATE_GENERIC_READ, // will be data that is read from so we keep it in the generic read state
+                    nullptr, // we do not have use an optimized clear value for constant buffers
+                    IID_PPV_ARGS(&constantBufferUploadHeaps[i])));
+                constantBufferUploadHeaps[i]->SetName(L"Constant Buffer Upload Resource Heap");
 
-                // first we will create a resource heap (upload heap) for each frame for the cubes constant buffers
-                // As you can see, we are allocating 64KB for each resource we create. Buffer resource heaps must be
-                // an alignment of 64KB. We are creating 3 resources, one for each frame. Each constant buffer is 
-                // only a 4x4 matrix of floats in this tutorial. So with a float being 4 bytes, we have 
-                // 16 floats in one constant buffer, and we will store 2 constant buffers in each
-                // heap, one for each cube, thats only 64x2 bits, or 128 bits we are using for each
-                // resource, and each resource must be at least 64KB (65536 bits)
-                for (int i = 0; i < FrameCount; ++i)
-                {
-                    CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
-                    auto desc = CD3DX12_RESOURCE_DESC::Buffer(1024 * 64);
-                    // create resource for cube 1
-                    ASSERT_SUCCEEDED(m_device->CreateCommittedResource(
-                        &heapProps, // this heap will be used to upload the constant buffer data
-                        D3D12_HEAP_FLAG_NONE, // no flags
-                        &desc, // size of the resource heap. Must be a multiple of 64KB for single-textures and constant buffers
-                        D3D12_RESOURCE_STATE_GENERIC_READ, // will be data that is read from so we keep it in the generic read state
-                        nullptr, // we do not have use an optimized clear value for constant buffers
-                        IID_PPV_ARGS(&constantBufferUploadHeaps[i])));
-                    constantBufferUploadHeaps[i]->SetName(L"Constant Buffer Upload Resource Heap");
+                ZeroMemory(&cbPerObject, sizeof(cbPerObject));
 
-                    ZeroMemory(&cbPerObject, sizeof(cbPerObject));
+                CD3DX12_RANGE readRange(0, 0);    // We do not intend to read from this resource on the CPU. (so end is less than or equal to begin)
 
-                    CD3DX12_RANGE readRange(0, 0);    // We do not intend to read from this resource on the CPU. (so end is less than or equal to begin)
+                // map the resource heap to get a gpu virtual address to the beginning of the heap
+                ASSERT_SUCCEEDED(constantBufferUploadHeaps[i]->Map(0, &readRange, reinterpret_cast<void**>(&cbvGPUAddress[i])));
 
-                    // map the resource heap to get a gpu virtual address to the beginning of the heap
-                    ASSERT_SUCCEEDED(constantBufferUploadHeaps[i]->Map(0, &readRange, reinterpret_cast<void**>(&cbvGPUAddress[i])));
-
-                    // Because of the constant read alignment requirements, constant buffer views must be 256 bit aligned. Our buffers are smaller than 256 bits,
-                    // so we need to add spacing between the two buffers, so that the second buffer starts at 256 bits from the beginning of the resource heap.
-                    memcpy(cbvGPUAddress[i], &cbPerObject, sizeof(cbPerObject)); // cube1's constant buffer data
-                    memcpy(cbvGPUAddress[i] + ConstantBufferPerObjectAlignedSize, &cbPerObject, sizeof(cbPerObject)); // cube2's constant buffer data
-                }
+                // Because of the constant read alignment requirements, constant buffer views must be 256 bit aligned. Our buffers are smaller than 256 bits,
+                // so we need to add spacing between the two buffers, so that the second buffer starts at 256 bits from the beginning of the resource heap.
+                memcpy(cbvGPUAddress[i], &cbPerObject, sizeof(cbPerObject)); // cube1's constant buffer data
+                memcpy(cbvGPUAddress[i] + ConstantBufferPerObjectAlignedSize, &cbPerObject, sizeof(cbPerObject)); // cube2's constant buffer data
             }
-            #pragma endregion CreateFrameResource
+        }
+        #pragma endregion CreateFrameResource
 
-            // Now we execute the command list to upload the initial assets (triangle data)
-            m_commandList->Close();
-            ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
-            m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+        // Now we execute the command list to upload the initial assets (triangle data)
+        m_commandList->Close();
+        ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
+        m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
-            // Wait for the command list to execute; we are reusing the same command 
-            // list in our main loop but for now, we just want to wait for setup to 
-            // complete before continuing.
-            //WaitForGPU();
-
+        {
+            ThrowIfFailed(m_device->CreateFence(m_fenceValue[m_frameIndex], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)));
             m_fenceValue[m_frameIndex]++;
-            ASSERT_SUCCEEDED(m_commandQueue->Signal(m_fence.Get(), m_fenceValue[m_frameIndex]));
 
-            // set starting cubes position
-            // first cube
-            cube1Position = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f); // set cube 1's position
-            XMVECTOR posVec = XMLoadFloat4(&cube1Position); // create xmvector for cube1's position
+            // Create an event handle to use for frame synchronization.
+            m_fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+            if (m_fenceEvent == nullptr)
+            {
+                ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()));
+            }
+        }
+        // Wait for the command list to execute; we are reusing the same command 
+        // list in our main loop but for now, we just want to wait for setup to 
+        // complete before continuing.
+        WaitForGPU();
 
-            XMMATRIX tmpMat = XMMatrixTranslationFromVector(posVec); // create translation matrix from cube1's position vector
-            XMStoreFloat4x4(&cube1RotMat, XMMatrixIdentity()); // initialize cube1's rotation matrix to identity matrix
-            XMStoreFloat4x4(&cube1WorldMat, tmpMat); // store cube1's world matrix
+        //// set starting cubes position
+        //// first cube
+        //cube1Position = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f); // set cube 1's position
+        //XMVECTOR posVec = XMLoadFloat4(&cube1Position); // create xmvector for cube1's position
 
-            // second cube
-            cube2PositionOffset = XMFLOAT4(1.5f, 0.0f, 0.0f, 0.0f);
-            posVec = XMLoadFloat4(&cube2PositionOffset) + XMLoadFloat4(&cube1Position); // create xmvector for cube2's position
-                                                                                        // we are rotating around cube1 here, so add cube2's position to cube1
+        //XMMATRIX tmpMat = XMMatrixTranslationFromVector(posVec); // create translation matrix from cube1's position vector
+        //XMStoreFloat4x4(&cube1RotMat, XMMatrixIdentity()); // initialize cube1's rotation matrix to identity matrix
+        //XMStoreFloat4x4(&cube1WorldMat, tmpMat); // store cube1's world matrix
 
-            tmpMat = XMMatrixTranslationFromVector(posVec); // create translation matrix from cube2's position offset vector
-            XMStoreFloat4x4(&cube2RotMat, XMMatrixIdentity()); // initialize cube2's rotation matrix to identity matrix
-            XMStoreFloat4x4(&cube2WorldMat, tmpMat); // store cube2's world matrix
+        //// second cube
+        //cube2PositionOffset = XMFLOAT4(1.5f, 0.0f, 0.0f, 0.0f);
+        //posVec = XMLoadFloat4(&cube2PositionOffset) + XMLoadFloat4(&cube1Position); // create xmvector for cube2's position
+        //                                                                            // we are rotating around cube1 here, so add cube2's position to cube1
+
+        //tmpMat = XMMatrixTranslationFromVector(posVec); // create translation matrix from cube2's position offset vector
+        //XMStoreFloat4x4(&cube2RotMat, XMMatrixIdentity()); // initialize cube2's rotation matrix to identity matrix
+        //XMStoreFloat4x4(&cube2WorldMat, tmpMat); // store cube2's world matrix
     }
 
     void D3DApp::PopulateCommandList()
@@ -693,6 +773,12 @@ namespace GameCore
 
         // Set necessary state.
         m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+
+        ID3D12DescriptorHeap* ppHeaps[] = { m_srvHeap.Get() };
+        m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
+        m_commandList->SetGraphicsRootDescriptorTable(2, m_srvHeap->GetGPUDescriptorHandleForHeapStart());
+
         m_commandList->RSSetViewports(1, &m_viewport);
         m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
@@ -744,21 +830,15 @@ namespace GameCore
 
     void D3DApp::WaitForGPU()
     {
-        // WAITING FOR THE FRAME TO COMPLETE BEFORE CONTINUING IS NOT BEST PRACTICE.
-        // This is code implemented as such for simplicity. The D3D12HelloFrameBuffering
-        // sample illustrates how to use fences for efficient resource usage and to
-        // maximize GPU utilization.
+        // Schedule a Signal command in the queue.
+        ThrowIfFailed(m_commandQueue->Signal(m_fence.Get(), m_fenceValue[m_frameIndex]));
 
-        //m_fenceValue[m_frameIndex]++;
+        // Wait until the fence has been processed.
+        ThrowIfFailed(m_fence->SetEventOnCompletion(m_fenceValue[m_frameIndex], m_fenceEvent));
+        WaitForSingleObjectEx(m_fenceEvent, INFINITE, FALSE);
 
-        // Signal and increment the fence value.
-        ASSERT_SUCCEEDED((m_commandQueue->Signal(m_fence.Get(), m_fenceValue[m_frameIndex])));
-
-        //// Wait until the previous frame is finished.
-        //ThrowIfFailed(m_fence->SetEventOnCompletion(m_fenceValue[m_frameIndex], m_fenceEvent));
-        //WaitForSingleObjectEx(m_fenceEvent, INFINITE, FALSE);
-
-        
+        // Increment the fence value for the current frame.
+        m_fenceValue[m_frameIndex]++;
     }
 
     void D3DApp::MoveToNextFrame()

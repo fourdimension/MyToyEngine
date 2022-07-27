@@ -21,7 +21,7 @@ namespace GameCore
 	struct VertexPosColor
 	{
 		DirectX::XMFLOAT3 pos;
-		DirectX::XMFLOAT4 color;
+		DirectX::XMFLOAT2 tex;
 		static const D3D12_INPUT_ELEMENT_DESC inputLayout[2];
 	};
 
@@ -111,6 +111,7 @@ namespace GameCore
 		ComPtr<ID3D12RootSignature> m_rootSignature;
 		ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
 		ComPtr<ID3D12DescriptorHeap> m_cbvHeap;
+		ComPtr<ID3D12DescriptorHeap> m_srvHeap;
 		ComPtr<ID3D12PipelineState> m_pipelineState;
 		ComPtr<ID3D12GraphicsCommandList> m_commandList;
 		UINT m_rtvDescriptorSize;
@@ -131,6 +132,8 @@ namespace GameCore
 		ID3D12Resource* constantBufferUploadHeaps[FrameCount]; // this is the memory on the gpu where constant buffers for each frame will be placed
 
 		UINT8* cbvGPUAddress[FrameCount]; // this is a pointer to each of the constant buffer resource heaps
+
+		Microsoft::WRL::ComPtr<ID3D12Resource>                                  m_texture;
 
 		XMFLOAT4X4 cube1WorldMat; // our first cubes world matrix (transformation matrix)
 		XMFLOAT4X4 cube1RotMat; // this will keep track of our rotation for the first cube
