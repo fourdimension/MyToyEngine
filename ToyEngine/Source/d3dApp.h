@@ -22,7 +22,7 @@ namespace GameCore
 	{
 		DirectX::XMFLOAT3 pos;
 		DirectX::XMFLOAT2 tex;
-		static const D3D12_INPUT_ELEMENT_DESC inputLayout[2];
+		//static const D3D12_INPUT_ELEMENT_DESC inputLayout[2];
 	};
 
 	class D3DApp
@@ -53,9 +53,13 @@ namespace GameCore
 		virtual void OnKeyDown(UINT8 /*key*/);
 		virtual void OnKeyUp(UINT8 /*key*/);
 
+
+		static ComPtr<ID3D12Device> m_device;
+		static const UINT FrameCount = 2;
+
 		static const UINT ConstantBufferPerObjectAlignedSize = (sizeof(ConstantBufferPerObject) + 255) & ~255;
 	private:
-		static const UINT FrameCount = 2;
+		
 		
 		static HWND m_hWnd;
 
@@ -104,7 +108,7 @@ namespace GameCore
 		CD3DX12_VIEWPORT m_viewport;
 		CD3DX12_RECT m_scissorRect;
 		ComPtr<IDXGISwapChain3> m_swapChain;
-		ComPtr<ID3D12Device> m_device;
+		
 		ComPtr<ID3D12Resource> m_renderTargets[FrameCount];
 		ComPtr<ID3D12CommandAllocator> m_commandAllocator[FrameCount];
 		ComPtr<ID3D12CommandQueue> m_commandQueue;

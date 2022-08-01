@@ -5,6 +5,7 @@
 namespace GameCore 
 {
     HWND D3DApp::m_hWnd = nullptr;
+    ComPtr<ID3D12Device> D3DApp::m_device = nullptr;
 
     D3DApp::D3DApp(HINSTANCE hInst)
         : m_hAppInst(hInst),
