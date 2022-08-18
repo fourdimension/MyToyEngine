@@ -56,11 +56,10 @@ namespace GameCore
 
 		static ComPtr<ID3D12Device> m_device;
 		static const UINT FrameCount = 2;
-
 		static const UINT ConstantBufferPerObjectAlignedSize = (sizeof(ConstantBufferPerObject) + 255) & ~255;
 	private:
 		
-		
+		UINT m_frameIndex;
 		static HWND m_hWnd;
 
 		// App resources.
@@ -74,7 +73,7 @@ namespace GameCore
 		ComPtr<ID3D12DescriptorHeap> m_dsDescriptorHeap; // This is a heap for our depth/stencil buffer descriptor
 
 		// Synchronization objects.
-		UINT m_frameIndex;
+		
 		HANDLE m_fenceEvent;
 		ComPtr<ID3D12Fence> m_fence;
 		UINT64 m_fenceValue[FrameCount];
