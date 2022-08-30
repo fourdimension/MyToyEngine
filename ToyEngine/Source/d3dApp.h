@@ -5,8 +5,12 @@
 #include "DXSampleHelper.h"
 #include "../Util/SimpleCamera.h"
 
+
 using namespace Microsoft::WRL;
 using namespace DirectX;
+
+class RootSignature;
+class CommandListManager;
 
 namespace GameCore 
 {
@@ -104,6 +108,9 @@ namespace GameCore
 		int m_DisplayHeight;
 
 		// Pipeline objects.
+		RootSignature* m_signature;
+		CommandListManager* m_commandListManager;
+
 		CD3DX12_VIEWPORT m_viewport;
 		CD3DX12_RECT m_scissorRect;
 		ComPtr<IDXGISwapChain3> m_swapChain;
@@ -111,7 +118,7 @@ namespace GameCore
 		ComPtr<ID3D12Resource> m_renderTargets[FrameCount];
 		ComPtr<ID3D12CommandAllocator> m_commandAllocator[FrameCount];
 		ComPtr<ID3D12CommandQueue> m_commandQueue;
-		ComPtr<ID3D12RootSignature> m_rootSignature;
+		//ComPtr<ID3D12RootSignature> m_rootSignature;
 		ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
 		ComPtr<ID3D12DescriptorHeap> m_cbvHeap;
 		ComPtr<ID3D12DescriptorHeap> m_srvHeap;

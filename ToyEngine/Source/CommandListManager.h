@@ -10,6 +10,8 @@ public:
 
 	void ExecuteCommandList(ID3D12CommandList* list);
 
+	inline D3D12_COMMAND_LIST_TYPE GetType() const { return m_type; }
+
 protected:
 	const D3D12_COMMAND_LIST_TYPE m_type;
 
@@ -26,6 +28,9 @@ public:
 	CommandListManager(ID3D12Device* device);
 	void CreateCommandList(D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* allocator, ID3D12CommandList** commandList);
 
+	CommandQueue& GetGraphicsQueue() { return m_GraphicsQueue; }
+	CommandQueue& GetComputeQueue() { return m_ComputeQueue; }
+	CommandQueue& GetCopyQueue() { return m_CopyQueue; }
 
 protected:
 	CommandQueue m_GraphicsQueue;
