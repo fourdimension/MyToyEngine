@@ -19,7 +19,7 @@ void CommandListManager::CreateCommandList(D3D12_COMMAND_LIST_TYPE type,
 	// TODO: add commandlist to pool
 	switch (type) 
 	{
-	case D3D12_COMMAND_LIST_TYPE_DIRECT:break;
+	case D3D12_COMMAND_LIST_TYPE_DIRECT: allocator = m_GraphicsQueue.RequestAllocator(); break;
 	case D3D12_COMMAND_LIST_TYPE_COMPUTE: break;
 	case D3D12_COMMAND_LIST_TYPE_BUNDLE: break;
 	case D3D12_COMMAND_LIST_TYPE_COPY: break;
@@ -50,6 +50,12 @@ CommandQueue::CommandQueue(ID3D12Device* device, D3D12_COMMAND_LIST_TYPE type)
 	m_hFenceEvent = CreateEvent(nullptr, false, false, nullptr);
 	ASSERT(m_hFenceEvent != nullptr);
 
+}
+
+ID3D12CommandAllocator* CommandQueue::RequestAllocator()
+{
+	uint64_t completedFence = m_pFence->GetCompletedValue();
+	return m_AllocatorPool.RequestAllocator(completedFence);
 }
 
 void CommandQueue::ExecuteCommandList(ID3D12CommandList* list)

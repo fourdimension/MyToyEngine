@@ -1,6 +1,7 @@
 #pragma once
 #include "pch.h"
 #include "d3dApp.h"
+#include "CommandAllocatorPool.h"
 #include <vector>
 
 class CommandQueue {
@@ -8,6 +9,7 @@ class CommandQueue {
 public:
 	CommandQueue(ID3D12Device* device, D3D12_COMMAND_LIST_TYPE type);
 
+	ID3D12CommandAllocator* RequestAllocator();
 	void ExecuteCommandList(ID3D12CommandList* list);
 
 	inline D3D12_COMMAND_LIST_TYPE GetType() const { return m_type; }
@@ -15,6 +17,7 @@ public:
 protected:
 	const D3D12_COMMAND_LIST_TYPE m_type;
 
+	CommandAllocatorPool m_AllocatorPool;
 	ComPtr<ID3D12CommandQueue> m_pCommandQueue;
 
 	ComPtr<ID3D12Fence> m_pFence;
