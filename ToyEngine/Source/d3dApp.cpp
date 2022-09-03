@@ -3,12 +3,13 @@
 #include "RootSignature.h"
 #include "PipelineState.h"
 #include "CommandListManager.h"
+#include "ContextManager.h"
 #include <sstream>
 
 namespace GameCore 
 {
     HWND D3DApp::m_hWnd = nullptr;
-    ComPtr<ID3D12Device> D3DApp::m_device = nullptr;
+    ID3D12Device* m_device = nullptr;
 
     D3DApp::D3DApp(HINSTANCE hInst)
         : m_hAppInst(hInst),
@@ -18,6 +19,7 @@ namespace GameCore
         m_AppPaused(false),
         m_viewport(0.0f, 0.0f, static_cast<float>(m_DisplayWidth), static_cast<float>(m_DisplayHeight)),
         m_scissorRect(0, 0, static_cast<LONG>(m_DisplayWidth), static_cast<LONG>(m_DisplayHeight)),
+        m_context(nullptr),
         m_frameCounter(0),
         m_fenceValue{},
         m_rtvDescriptorSize(0),
@@ -72,7 +74,7 @@ namespace GameCore
 
 
         // Describe and create the command queue.
-        m_commandListManager = new CommandListManager(m_device.Get());
+        m_context = new CommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
         DXGI_SAMPLE_DESC sampleDesc = {};
         sampleDesc.Count = 1; // multisample count (no multisampling, so we just put 1, since we still need 1 sample)
@@ -565,7 +567,7 @@ namespace GameCore
             // from the upload heap to the Texture2D.
             //std::vector<UINT8> texture = GenerateTextureData();
             std::unique_ptr<uint8_t[]> ddsData;
-            CreateDDSTextureFromFile(m_device.Get(), L"Assets/seafloor.dds", 0u, false, m_texture.ReleaseAndGetAddressOf(), m_srvHeap->GetCPUDescriptorHandleForHeapStart(), ddsData);
+            CreateDDSTextureFromFile(m_device, L"Assets/seafloor.dds", 0u, false, m_texture.ReleaseAndGetAddressOf(), m_srvHeap->GetCPUDescriptorHandleForHeapStart(), ddsData);
 
             // Describe and create a Texture2D.
             D3D12_RESOURCE_DESC textureDesc = {};

@@ -6,14 +6,17 @@
 #include "../Util/SimpleCamera.h"
 
 
-using namespace Microsoft::WRL;
+//using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 
 class RootSignature;
 class CommandListManager;
+class CommandContext;
 
 namespace GameCore 
 {
+	extern ID3D12Device* m_device;
+
 	struct ConstantBufferPerObject {
 		XMFLOAT4X4 wvpMat;
 	};
@@ -57,8 +60,6 @@ namespace GameCore
 		virtual void OnKeyDown(UINT8 /*key*/);
 		virtual void OnKeyUp(UINT8 /*key*/);
 
-
-		static ComPtr<ID3D12Device> m_device;
 		static const UINT FrameCount = 2;
 		static const UINT ConstantBufferPerObjectAlignedSize = (sizeof(ConstantBufferPerObject) + 255) & ~255;
 	private:
@@ -106,6 +107,8 @@ namespace GameCore
 		HINSTANCE m_hAppInst;
 		int m_DisplayWidth;
 		int m_DisplayHeight;
+
+		CommandContext* m_context;
 
 		// Pipeline objects.
 		RootSignature* m_signature;

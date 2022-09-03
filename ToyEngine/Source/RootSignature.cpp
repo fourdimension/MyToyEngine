@@ -66,7 +66,7 @@ void RootSignature::Finalize()
 	// This is the highest version the sample supports. If CheckFeatureSupport succeeds, the HighestVersion returned will not be greater than this.
 	featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
 
-	if (FAILED(D3DApp::m_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
+	if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
 	{
 		featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
 	}
@@ -84,7 +84,7 @@ void RootSignature::Finalize()
 	Microsoft::WRL::ComPtr<ID3DBlob> error;
 
 	ASSERT_SUCCEEDED(D3DX12SerializeVersionedRootSignature(&m_rootSignatureDesc, featureData.HighestVersion, &signature, &error));
-	ASSERT_SUCCEEDED(D3DApp::m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
+	ASSERT_SUCCEEDED(m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
 
 	m_finalize = true;
 }

@@ -1,10 +1,10 @@
 #pragma once
 #include "pch.h"
 
-template<class T>
-using ComPtr = Microsoft::WRL::ComPtr<T>;
+using Microsoft::WRL::ComPtr;
 
 class GpuResource;
+class CommandListManager;
 
 class ContextManager {
 public: 
@@ -12,14 +12,18 @@ public:
 };
 
 class CommandContext {
-	//friend class ContextManager;
-private:
-	CommandContext(D3D12_COMMAND_LIST_TYPE type);
+	friend class ContextManager;
 
 public:
+	CommandContext(D3D12_COMMAND_LIST_TYPE type);
 	void Transition(GpuResource& resource, D3D12_RESOURCE_STATES newState);
 
+private:
+	void Initialize();
+
 protected:
+	CommandListManager* m_pCmdListManager;
+
 	ComPtr<ID3D12GraphicsCommandList> m_pCommandList;
 	ComPtr<ID3D12CommandAllocator> m_pAllocator;
 	ComPtr<ID3D12RootSignature> m_pGraphicsRootSignature;

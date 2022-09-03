@@ -13,7 +13,7 @@ void GpuBuffer::Create(const std::wstring& name, uint32_t numElements, uint32_t 
 
     CD3DX12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(data));
     CD3DX12_HEAP_PROPERTIES bufferProp(D3D12_HEAP_TYPE_DEFAULT);
-    ThrowIfFailed(D3DApp::m_device->CreateCommittedResource(
+    ThrowIfFailed(m_device->CreateCommittedResource(
         &bufferProp,
         D3D12_HEAP_FLAG_NONE,
         &desc,

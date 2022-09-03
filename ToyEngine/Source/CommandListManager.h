@@ -29,7 +29,7 @@ class CommandListManager
 {
 public:
 	CommandListManager(ID3D12Device* device);
-	void CreateCommandList(D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* allocator, ID3D12CommandList** commandList);
+	void CreateCommandList(D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* allocator, ID3D12CommandList* commandList);
 
 	CommandQueue& GetGraphicsQueue() { return m_GraphicsQueue; }
 	CommandQueue& GetComputeQueue() { return m_ComputeQueue; }

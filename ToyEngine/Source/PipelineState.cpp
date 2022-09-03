@@ -26,6 +26,6 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC GraphicsPSO::InitGraphicsPSODesc(const D3D12_
 
 void GraphicsPSO::Finalize()
 {
-    ASSERT_SUCCEEDED(D3DApp::m_device->CreateGraphicsPipelineState(&m_psoDesc, IID_PPV_ARGS(&m_pipelineState)));
+    ASSERT_SUCCEEDED(m_device->CreateGraphicsPipelineState(&m_psoDesc, IID_PPV_ARGS(&m_pipelineState)));
     m_pipelineState->SetName(m_name);
 }
