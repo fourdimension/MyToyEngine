@@ -4,6 +4,8 @@
 #include "PipelineState.h"
 #include "CommandListManager.h"
 #include "ContextManager.h"
+#include "GpuBuffer.h"
+#include "ResourceUpload.h"
 #include <sstream>
 
 namespace GameCore 
@@ -330,38 +332,19 @@ namespace GameCore
             ASSERT_SUCCEEDED(D3DCompileFromFile(L"Shaders\\Vertexshader.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
             ASSERT_SUCCEEDED(D3DCompileFromFile(L"Shaders\\Pixelshader.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
 
-            // Define the vertex input layout.
-            D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
-            {
-                { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-                //{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-                { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-            };
-
             GraphicsPSO gPSO(L"graphicsPSO", m_signature);
-            gPSO.InitGraphicsPSODesc({ inputElementDescs, _countof(inputElementDescs) });
+            gPSO.InitGraphicsPSODesc({ VertexPosTex::inputLayout, _countof(VertexPosTex::inputLayout) });
             gPSO.BindVS(vertexShader.Get());
             gPSO.BindPS(pixelShader.Get());
             gPSO.Finalize();
 
-        // create a command list 
-            //m_commandListManager->CreateCommandList(m_commandListManager->GetGraphicsQueue().GetType(), )
-        ASSERT_SUCCEEDED(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator[m_frameIndex].Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
-
         // Create the vertex/index/depth buffer.
         {
-            // Define the geometry for a triangle.
-            VertexPosColor vertices[] =
-            {
-                /*{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f) },
-                { XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f) },
-                { XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f) },
-                { XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f) },
-                { XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f) },
-                { XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 1.0f, 1.0f) },
-                { XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f) },
-                { XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 1.0f, 1.0f) }*/
+            ID3D12GraphicsCommandList* commandList = m_context->GetCommandList();
 
+            // Define the geometry for a triangle.
+            VertexPosTex vertices[] =
+            {
                 // front face
                 { {-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f} },
                 { { 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f} },
@@ -399,53 +382,18 @@ namespace GameCore
                 { {-0.5f, -0.5f,  0.5f}, {1.0f, 1.0f} },
             };
 
-            const UINT vertexBufferSize = sizeof(vertices);
+            const uint32_t vertexBufferSize = sizeof(vertices);
 
-            // Note: using upload heaps to transfer static data like vert buffers is not 
-            // recommended. Every time the GPU needs it, the upload heap will be marshalled 
-            // over. Please read up on Default Heap usage. An upload heap is used here for 
-            // code simplicity and because there are very few verts to actually transfer.
+            GpuBuffer vertexBuffer;
+            vertexBuffer.Create(L"vertex Buffer Resource Heap", vertexBufferSize / sizeof(VertexPosTex), vertexBufferSize, vertices);
 
-            CD3DX12_HEAP_PROPERTIES vBufferProps(D3D12_HEAP_TYPE_DEFAULT);
-            auto desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
-            ThrowIfFailed(m_device->CreateCommittedResource(
-                &vBufferProps,
-                D3D12_HEAP_FLAG_NONE,
-                &desc,
-                D3D12_RESOURCE_STATE_COPY_DEST,// we will start this heap in the copy destination state since we will copy data
-                                                // from the upload heap to this heap
-                nullptr,
-                IID_PPV_ARGS(&m_vertexBuffer)));
-
-            // we can give resource heaps a name so when we debug with the graphics debugger we know what resource we are looking at
-            m_vertexBuffer->SetName(L"Vertex Buffer Resource Heap");
-
-            // create upload heap
-            // upload heaps are used to upload data to the GPU. CPU can write to it, GPU can read from it
-            // We will upload the vertex buffer using this heap to the default heap
-            ID3D12Resource* vBufferUploadHeap;
-            CD3DX12_HEAP_PROPERTIES vBufferHeapProp(D3D12_HEAP_TYPE_UPLOAD);
-            desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
-            m_device->CreateCommittedResource(
-                &vBufferHeapProp, // upload heap
-                D3D12_HEAP_FLAG_NONE, // no flags
-                &desc, // resource description for a buffer
-                D3D12_RESOURCE_STATE_GENERIC_READ, // GPU will read from this buffer and copy its contents to the default heap
-                nullptr,
-                IID_PPV_ARGS(&vBufferUploadHeap));
-            vBufferUploadHeap->SetName(L"Vertex Buffer Upload Resource Heap");
-
-            // store  ivertex buffern upload heap
-            D3D12_SUBRESOURCE_DATA vertexData = {};
-            vertexData.pData = reinterpret_cast<BYTE*>(vertices); // pointer to our vertex array
-            vertexData.RowPitch = vertexBufferSize; // size of all our triangle vertex data
-            vertexData.SlicePitch = vertexBufferSize; // also the size of our triangle vertex data
-
-            UpdateSubresources(m_commandList.Get(), m_vertexBuffer.Get(), vBufferUploadHeap, 0, 0, 1, &vertexData);
+            UploadBuffer vUploadBuffer;
+            vUploadBuffer.Create(L"vertex Buffer Upload Resource Heap", vertexBufferSize);
+            vUploadBuffer.UpdateData(commandList, vertexBuffer.GetResource(), vertices);
 
             // transition the vertex buffer data from copy destination state to vertex buffer state
             auto vResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_vertexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
-            m_commandList->ResourceBarrier(1, &vResourceBarrier);
+            commandList->ResourceBarrier(1, &vResourceBarrier);
 
             DWORD indices[] = {
                         // ffront face
@@ -473,59 +421,22 @@ namespace GameCore
                 20, 23, 21, // second triangle
             };
 
-            int iBufferSize = sizeof(indices);
+            const uint32_t indexBufferSize = sizeof(indices);
 
-            numCubeIndices = iBufferSize / sizeof(DWORD);
+            GpuBuffer indexBuffer;
+            indexBuffer.Create(L"index Buffer Resource Heap", indexBufferSize / sizeof(DWORD), indexBufferSize, indices);
 
-            CD3DX12_HEAP_PROPERTIES iBufferProp(D3D12_HEAP_TYPE_DEFAULT);
-            desc = CD3DX12_RESOURCE_DESC::Buffer(iBufferSize);
-            // create default heap to hold index buffer
-            m_device->CreateCommittedResource(
-                &iBufferProp, // a default heap
-                D3D12_HEAP_FLAG_NONE, // no flags
-                &desc, // resource description for a buffer
-                D3D12_RESOURCE_STATE_COPY_DEST, // start in the copy destination state
-                nullptr, // optimized clear value must be null for this type of resource
-                IID_PPV_ARGS(&m_indexBuffer));
-
-            m_indexBuffer->SetName(L"Index Buffer Resource Heap");
-
-            ID3D12Resource* iBufferUploadHeap;
-            CD3DX12_HEAP_PROPERTIES iBufferHeapProp(D3D12_HEAP_TYPE_UPLOAD);
-            desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
-            m_device->CreateCommittedResource(
-                &iBufferHeapProp, // upload heap
-                D3D12_HEAP_FLAG_NONE, // no flags
-                &desc, // resource description for a buffer
-                D3D12_RESOURCE_STATE_GENERIC_READ, // GPU will read from this buffer and copy its contents to the default heap
-                nullptr,
-                IID_PPV_ARGS(&iBufferUploadHeap));
-            vBufferUploadHeap->SetName(L"Index Buffer Upload Resource Heap");
-
-            // store vertex buffer in upload heap
-            D3D12_SUBRESOURCE_DATA indexData = {};
-            indexData.pData = reinterpret_cast<BYTE*>(indices); // pointer to our index array
-            indexData.RowPitch = iBufferSize; // size of all our index buffer
-            indexData.SlicePitch = iBufferSize; // also the size of our index buffer
-
-            // we are now creating a command with the command list to copy the data from
-            // the upload heap to the default heap
-            UpdateSubresources(m_commandList.Get(), m_indexBuffer.Get(), iBufferUploadHeap, 0, 0, 1, &indexData);
+            UploadBuffer iUploadBuffer;
+            vUploadBuffer.Create(L"index Buffer Upload Resource Heap", indexBufferSize);
+            vUploadBuffer.UpdateData(commandList, indexBuffer.GetResource(), indices);
 
             auto iResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_indexBuffer.Get(),
                 D3D12_RESOURCE_STATE_COPY_DEST,
                 D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
             m_commandList->ResourceBarrier(1, &iResourceBarrier);
                 
-
-            // Initialize the vertex buffer view.
-            m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-            m_vertexBufferView.StrideInBytes = sizeof(VertexPosColor);
-            m_vertexBufferView.SizeInBytes = vertexBufferSize;
-
-            m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
-            m_indexBufferView.Format = DXGI_FORMAT_R32_UINT; // 32-bit unsigned integer (this is what a dword is, double word, a word is 2 bytes)
-            m_indexBufferView.SizeInBytes = iBufferSize;
+            m_vertexBufferView = vertexBuffer.VertexBufferView(sizeof(VertexPosTex), vertexBufferSize);
+            m_indexBufferView = indexBuffer.IndexBufferView(indexBufferSize);
         }
 
         // Create the depth/stencil buffer

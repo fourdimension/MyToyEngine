@@ -25,13 +25,6 @@ namespace GameCore
 		XMFLOAT4X4 vpMat;
 	};
 
-	struct VertexPosColor
-	{
-		DirectX::XMFLOAT3 pos;
-		DirectX::XMFLOAT2 tex;
-		//static const D3D12_INPUT_ELEMENT_DESC inputLayout[2];
-	};
-
 	class D3DApp
 	{
 	public:
