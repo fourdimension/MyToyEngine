@@ -6,6 +6,7 @@
 #include "ContextManager.h"
 #include "GpuBuffer.h"
 #include "ResourceUpload.h"
+#include "DynamicUploadHeap.h"
 #include <sstream>
 
 namespace GameCore 
@@ -25,7 +26,8 @@ namespace GameCore
         m_frameCounter(0),
         m_fenceValue{},
         m_rtvDescriptorSize(0),
-        m_signature(nullptr)
+        m_signature(nullptr),
+        m_dynamicUploadHeap(true, m_device, 0)
     {
         WCHAR assetsPath[512];
         GetAssetsPath(assetsPath, _countof(assetsPath)); // How to get path??
@@ -554,7 +556,18 @@ namespace GameCore
             // 16 floats in one constant buffer, and we will store 2 constant buffers in each
             // heap, one for each cube, thats only 64x2 bits, or 128 bits we are using for each
             // resource, and each resource must be at least 64KB (65536 bits)
-            for (int i = 0; i < FrameCount; ++i)
+            
+            size_t c_bufferSize = sizeof(cbPerObject);
+            for (int i = 0; i < FrameCount; ++i) {
+                DynamicAllocation obj1 = m_dynamicUploadHeap.Allocate(c_bufferSize, ConstantUploadAlignedSize);
+                DynamicAllocation obj2 = m_dynamicUploadHeap.Allocate(c_bufferSize, ConstantUploadAlignedSize);
+                ZeroMemory(&cbPerObject, sizeof(cbPerObject));
+                memcpy(obj1.CPUAddress, &cbPerObject, sizeof(cbPerObject)); // cube1's constant buffer data
+                memcpy((UINT8*)obj2.CPUAddress + ConstantBufferPerObjectAlignedSize, &cbPerObject, sizeof(cbPerObject)); // cube2's constant buffer data
+            }
+
+            /*
+             for (int i = 0; i < FrameCount; ++i)
             {
                 CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
                 auto desc = CD3DX12_RESOURCE_DESC::Buffer(1024 * 64);
@@ -580,6 +593,8 @@ namespace GameCore
                 memcpy(cbvGPUAddress[i], &cbPerObject, sizeof(cbPerObject)); // cube1's constant buffer data
                 memcpy(cbvGPUAddress[i] + ConstantBufferPerObjectAlignedSize, &cbPerObject, sizeof(cbPerObject)); // cube2's constant buffer data
             }
+            */
+           
         }
         #pragma endregion CreateFrameResource
 
@@ -723,6 +738,9 @@ namespace GameCore
 
         // Set the fence value for the next frame.
         m_fenceValue[m_frameIndex] = currentFenceValue + 1;
+
+        // TODO: check finishFrame() parameter
+        m_dynamicUploadHeap.FinishFrame(currentFenceValue, m_fence->GetCompletedValue());
     }
 
     void D3DApp::UpdateConstantBuffers()

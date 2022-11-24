@@ -12,6 +12,7 @@ using namespace DirectX;
 class RootSignature;
 class CommandListManager;
 class CommandContext;
+class DynamicUploadHeap;
 
 namespace GameCore 
 {
@@ -55,6 +56,7 @@ namespace GameCore
 
 		static const UINT FrameCount = 2;
 		static const UINT ConstantBufferPerObjectAlignedSize = (sizeof(ConstantBufferPerObject) + 255) & ~255;
+		static const UINT ConstantUploadAlignedSize = 256 * 1024; // 256kb
 	private:
 		
 		UINT m_frameIndex;
@@ -101,6 +103,7 @@ namespace GameCore
 		int m_DisplayWidth;
 		int m_DisplayHeight;
 
+		DynamicUploadHeap m_dynamicUploadHeap;
 		CommandContext* m_context;
 
 		// Pipeline objects.
