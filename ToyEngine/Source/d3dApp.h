@@ -103,12 +103,12 @@ namespace GameCore
 		int m_DisplayWidth;
 		int m_DisplayHeight;
 
-		DynamicUploadHeap m_dynamicUploadHeap;
+		DynamicUploadHeap* m_dynamicUploadHeap;
 		CommandContext* m_context;
 
 		// Pipeline objects.
 		RootSignature* m_signature;
-		CommandListManager* m_commandListManager;
+		//CommandListManager m_commandListManager;
 
 		CD3DX12_VIEWPORT m_viewport;
 		CD3DX12_RECT m_scissorRect;

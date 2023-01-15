@@ -5,9 +5,9 @@
 
 class CommandAllocatorPool {
 public:
-	CommandAllocatorPool(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandAllocatorPool(ID3D12Device* device, D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	ID3D12CommandAllocator* RequestAllocator(uint64_t completedFence);
-	void SetDevice(ID3D12Device* device);
+
 protected:
 	Microsoft::WRL::ComPtr<ID3D12Device> m_pDevice;
 	D3D12_COMMAND_LIST_TYPE m_type;

@@ -6,12 +6,23 @@ using namespace GameCore;
 
 CommandListManager::CommandListManager(ID3D12Device* device)
 	:m_pDevice(device),
-	m_GraphicsQueue(m_pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT),
-	m_ComputeQueue(m_pDevice, D3D12_COMMAND_LIST_TYPE_COMPUTE),
-	m_CopyQueue(m_pDevice, D3D12_COMMAND_LIST_TYPE_COPY)
+	m_GraphicsQueue(device, D3D12_COMMAND_LIST_TYPE_DIRECT),
+	m_ComputeQueue(device, D3D12_COMMAND_LIST_TYPE_COMPUTE),
+	m_CopyQueue(device, D3D12_COMMAND_LIST_TYPE_COPY)
 {
 	ASSERT(m_pDevice != nullptr);
 }
+
+//void CommandListManager::Create(ID3D12Device* device)
+//{
+//	ASSERT(device != nullptr);
+//
+//	m_pDevice = device;
+//
+//	m_GraphicsQueue.Create(device);
+//	m_ComputeQueue.Create(device);
+//	m_CopyQueue.Create(device);
+//}
 
 void CommandListManager::CreateCommandList(D3D12_COMMAND_LIST_TYPE type,
 	ID3D12CommandAllocator* allocator, ID3D12CommandList* commandList)
@@ -34,7 +45,8 @@ CommandQueue::CommandQueue(ID3D12Device* device, D3D12_COMMAND_LIST_TYPE type)
 	:m_type(type),
 	m_pFence(nullptr),
 	m_fenceValue(0),
-	m_hFenceEvent(nullptr)
+	m_hFenceEvent(nullptr),
+	m_AllocatorPool(device, type)
 {
 	// Describe and create the command queue.
 	D3D12_COMMAND_QUEUE_DESC queueDesc = {};

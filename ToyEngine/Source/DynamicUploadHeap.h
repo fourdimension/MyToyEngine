@@ -29,6 +29,8 @@
 // Constant blocks must be multiples of 16 constants @ 16 bytes each
 #define DEFAULT_ALIGN 256
 
+
+
 struct DynamicAllocation
 {
 	DynamicAllocation(ID3D12Resource *pBuff, size_t _offset, size_t _size) :
@@ -47,7 +49,7 @@ struct DynamicAllocation
 class GPURingBuffer : public RingBuffer
 {
 public:
-	GPURingBuffer(size_t MaxSize, ID3D12Device* pd3d12Device, bool AllowCPUAccess);
+	GPURingBuffer(size_t MaxSize, bool AllowCPUAccess);
 
 	GPURingBuffer(GPURingBuffer&& rhs) noexcept:
 		RingBuffer(std::move(rhs)),
@@ -95,23 +97,25 @@ class DynamicUploadHeap
 {
 public:
 
-	DynamicUploadHeap(bool bIsCPUAccessible, ID3D12Device* pDevice, size_t InitialSize);
+	DynamicUploadHeap() = default;
+	void Initialize(bool bIsCPUAccessible, size_t InitialSize);
 
-	DynamicUploadHeap(const DynamicUploadHeap&) = delete;
-	DynamicUploadHeap(DynamicUploadHeap&&) = delete;
-	DynamicUploadHeap& operator=(const DynamicUploadHeap&) = delete;
-	DynamicUploadHeap& operator=(DynamicUploadHeap&&) = delete;
+	//DynamicUploadHeap(const DynamicUploadHeap&) = delete;
+	//DynamicUploadHeap(DynamicUploadHeap&&) = delete;
+	//DynamicUploadHeap& operator=(const DynamicUploadHeap&) = delete;
+	//DynamicUploadHeap& operator=(DynamicUploadHeap&&) = delete;
 
 	DynamicAllocation Allocate(size_t SizeInBytes, size_t Alignment = DEFAULT_ALIGN);
 
 	void FinishFrame(uint64_t FenceValue, uint64_t LastCompletedFenceValue);
 
 private:
-	const bool m_IsCPUAccessible;
+	bool m_IsCPUAccessible;
 	// When a chunk of dynamic memory is requested, the heap first tries to allocate the memory in the largest GPU buffer. 
 	// If allocation fails, a new ring buffer is created that provides enough space and requests memory from that buffer.
 	// Only the largest buffer is used for allocation and all other buffers are released when GPU is done with corresponding frames
 	std::vector<GPURingBuffer> m_RingBuffers;
-	ID3D12Device* m_pDevice;
 	//std::mutex m_Mutex;
 };
+
+DynamicUploadHeap* GetUploadHeap();

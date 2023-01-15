@@ -21,7 +21,7 @@ public:
 protected:
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;
 	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC m_rootSignatureDesc;
-
+	//CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC m_rootSignatureDesc;
 	bool m_finalize;
 	UINT m_numParameters;
 	UINT m_numStaticSamplers;

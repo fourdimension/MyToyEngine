@@ -1,7 +1,7 @@
 #include "CommandAllocatorPool.h"
 
-CommandAllocatorPool::CommandAllocatorPool(D3D12_COMMAND_LIST_TYPE type):
-	m_pDevice(nullptr),
+CommandAllocatorPool::CommandAllocatorPool(ID3D12Device* device, D3D12_COMMAND_LIST_TYPE type):
+	m_pDevice(device),
 	m_type(type)
 {
 }
@@ -34,7 +34,3 @@ ID3D12CommandAllocator* CommandAllocatorPool::RequestAllocator(uint64_t complete
 	return nullptr;
 }
 
-void CommandAllocatorPool::SetDevice(ID3D12Device* device)
-{
-	m_pDevice = device;
-}

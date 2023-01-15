@@ -14,6 +14,8 @@ public:
 
 	inline D3D12_COMMAND_LIST_TYPE GetType() const { return m_type; }
 
+	ID3D12CommandQueue* GetCommandQueue(){ return m_pCommandQueue.Get(); }
+
 protected:
 	const D3D12_COMMAND_LIST_TYPE m_type;
 
@@ -29,11 +31,17 @@ class CommandListManager
 {
 public:
 	CommandListManager(ID3D12Device* device);
+	//void Create(ID3D12Device* device);
 	void CreateCommandList(D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* allocator, ID3D12CommandList* commandList);
 
 	CommandQueue& GetGraphicsQueue() { return m_GraphicsQueue; }
 	CommandQueue& GetComputeQueue() { return m_ComputeQueue; }
 	CommandQueue& GetCopyQueue() { return m_CopyQueue; }
+
+	ID3D12CommandQueue* GetCommandQueue()
+	{
+		return m_GraphicsQueue.GetCommandQueue();
+	}
 
 protected:
 	CommandQueue m_GraphicsQueue;

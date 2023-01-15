@@ -18,6 +18,7 @@ public:
 	CommandContext(D3D12_COMMAND_LIST_TYPE type);
 	void Transition(GpuResource& resource, D3D12_RESOURCE_STATES newState);
 
+	CommandListManager* GetCommandListManager() { return m_pCmdListManager; }
 	ID3D12GraphicsCommandList* GetCommandList() { return m_pCommandList.Get(); }
 
 private:

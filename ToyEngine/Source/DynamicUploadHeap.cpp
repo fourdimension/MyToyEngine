@@ -24,9 +24,17 @@
 #include "DynamicUploadHeap.h"
 #include "d3dApp.h"
 
-using namespace GameCore;
+//static DynamicUploadHeap UploadSubmission(true, 0);  // TODO: find a way to set visibility gracefully
+//
+///*temporary use one heap for constant buffer upload*/
 
-GPURingBuffer::GPURingBuffer(size_t MaxSize, ID3D12Device* pd3d12Device, bool AllowCPUAccess):
+static DynamicUploadHeap UploadSubmission;
+
+DynamicUploadHeap* GetUploadHeap() {
+	return &UploadSubmission;
+}
+
+GPURingBuffer::GPURingBuffer(size_t MaxSize, bool AllowCPUAccess):
     RingBuffer(MaxSize),
     m_CpuVirtualAddress(nullptr),
     m_GpuVirtualAddress(0)
@@ -63,7 +71,7 @@ GPURingBuffer::GPURingBuffer(size_t MaxSize, ID3D12Device* pd3d12Device, bool Al
 	}
 	ResourceDesc.Width = MaxSize;
 
-	auto hr = pd3d12Device->CreateCommittedResource(&HeapProps, D3D12_HEAP_FLAG_NONE, &ResourceDesc,
+	auto hr = GameCore::m_device->CreateCommittedResource(&HeapProps, D3D12_HEAP_FLAG_NONE, &ResourceDesc,
 		DefaultUsage, nullptr, __uuidof(m_pBuffer), reinterpret_cast<void**>(static_cast<ID3D12Resource**>(&m_pBuffer)));
 	if (FAILED(hr))
 		//LOG_ERROR("Failed to create new upload ring buffer");
@@ -85,12 +93,11 @@ GPURingBuffer::~GPURingBuffer()
 	Free();
 }
 
-DynamicUploadHeap::DynamicUploadHeap(bool IsCPUAccessible, ID3D12Device* pDevice, size_t InitialSize) :
-	m_pDevice(pDevice),
-	m_IsCPUAccessible(IsCPUAccessible)
+void DynamicUploadHeap::Initialize(bool IsCPUAccessible, size_t InitialSize)
 {
+	m_IsCPUAccessible = IsCPUAccessible;
 	m_RingBuffers.clear();
-	m_RingBuffers.emplace_back(InitialSize, pDevice, m_IsCPUAccessible);
+	m_RingBuffers.emplace_back(InitialSize, m_IsCPUAccessible);
 }
 
 DynamicAllocation GPURingBuffer::Allocate(size_t sizeInBytes)
@@ -141,7 +148,7 @@ DynamicAllocation DynamicUploadHeap::Allocate(size_t SizeInBytes, size_t Alignme
 		auto NewMaxSize = m_RingBuffers.back().GetMaxSize() * 2;
 		// Make sure the buffer is large enough for the requested chunk
 		while (NewMaxSize < SizeInBytes)NewMaxSize *= 2;
-		m_RingBuffers.emplace_back(NewMaxSize, m_device, m_IsCPUAccessible);
+		m_RingBuffers.emplace_back(NewMaxSize, m_IsCPUAccessible);
 		DynAlloc = m_RingBuffers.back().Allocate(AlignedSize);
 	}
 	return DynAlloc;

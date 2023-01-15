@@ -27,12 +27,12 @@ namespace GameCore
         m_fenceValue{},
         m_rtvDescriptorSize(0),
         m_signature(nullptr),
-        m_dynamicUploadHeap(true, m_device, 0)
+       // m_commandListManager(nullptr),
+        m_dynamicUploadHeap(GetUploadHeap())
     {
         WCHAR assetsPath[512];
         GetAssetsPath(assetsPath, _countof(assetsPath)); // How to get path??
         m_assetsPath = assetsPath;
-
     }
 
     D3DApp::~D3DApp()
@@ -95,8 +95,8 @@ namespace GameCore
         swapChainDesc.SampleDesc = sampleDesc;
 
         ComPtr<IDXGISwapChain1> swapChain;
-        ASSERT_SUCCEEDED(dxgiFactory->CreateSwapChainForHwnd(
-            m_commandQueue.Get(),        // Swap chain needs the queue so that it can force a flush on it.
+        ASSERT_SUCCEEDED(dxgiFactory->CreateSwapChainForHwnd( 
+            m_context->GetCommandListManager()->GetCommandQueue(),        // Swap chain needs the queue so that it can force a flush on it.
             m_hWnd,
             &swapChainDesc,
             nullptr,
@@ -312,7 +312,7 @@ namespace GameCore
             
 #pragma region RootSignature
             // create a root parameter and fill it out
-            m_signature = new RootSignature(3, 1);
+            m_signature = new RootSignature(1, 1);
 
             m_signature->InitRootParameters();
             m_signature->InitStaticSamplers();
@@ -340,6 +340,8 @@ namespace GameCore
             gPSO.BindPS(pixelShader.Get());
             gPSO.Finalize();
 
+
+           // m_commandListManager.Create();
         // Create the vertex/index/depth buffer.
         {
             ID3D12GraphicsCommandList* commandList = m_context->GetCommandList();
@@ -556,17 +558,20 @@ namespace GameCore
             // 16 floats in one constant buffer, and we will store 2 constant buffers in each
             // heap, one for each cube, thats only 64x2 bits, or 128 bits we are using for each
             // resource, and each resource must be at least 64KB (65536 bits)
-            
-            size_t c_bufferSize = sizeof(cbPerObject);
-            for (int i = 0; i < FrameCount; ++i) {
-                DynamicAllocation obj1 = m_dynamicUploadHeap.Allocate(c_bufferSize, ConstantUploadAlignedSize);
-                DynamicAllocation obj2 = m_dynamicUploadHeap.Allocate(c_bufferSize, ConstantUploadAlignedSize);
-                ZeroMemory(&cbPerObject, sizeof(cbPerObject));
-                memcpy(obj1.CPUAddress, &cbPerObject, sizeof(cbPerObject)); // cube1's constant buffer data
-                memcpy((UINT8*)obj2.CPUAddress + ConstantBufferPerObjectAlignedSize, &cbPerObject, sizeof(cbPerObject)); // cube2's constant buffer data
-            }
 
-            /*
+            //m_dynamicUploadHeap->Initialize(true, 0);
+            size_t c_bufferSize = sizeof(cbPerObject);
+
+            //
+            //for (int i = 0; i < FrameCount; ++i) {
+            //    DynamicAllocation obj1 = m_dynamicUploadHeap->Allocate(c_bufferSize, ConstantUploadAlignedSize);
+            //    DynamicAllocation obj2 = m_dynamicUploadHeap->Allocate(c_bufferSize, ConstantUploadAlignedSize);
+            //    ZeroMemory(&cbPerObject, sizeof(cbPerObject));
+            //    memcpy(obj1.CPUAddress, &cbPerObject, sizeof(cbPerObject)); // cube1's constant buffer data
+            //    memcpy((UINT8*)obj2.CPUAddress + ConstantBufferPerObjectAlignedSize, &cbPerObject, sizeof(cbPerObject)); // cube2's constant buffer data
+            //}
+
+            
              for (int i = 0; i < FrameCount; ++i)
             {
                 CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
@@ -593,7 +598,7 @@ namespace GameCore
                 memcpy(cbvGPUAddress[i], &cbPerObject, sizeof(cbPerObject)); // cube1's constant buffer data
                 memcpy(cbvGPUAddress[i] + ConstantBufferPerObjectAlignedSize, &cbPerObject, sizeof(cbPerObject)); // cube2's constant buffer data
             }
-            */
+            
            
         }
         #pragma endregion CreateFrameResource
@@ -740,7 +745,7 @@ namespace GameCore
         m_fenceValue[m_frameIndex] = currentFenceValue + 1;
 
         // TODO: check finishFrame() parameter
-        m_dynamicUploadHeap.FinishFrame(currentFenceValue, m_fence->GetCompletedValue());
+        m_dynamicUploadHeap->FinishFrame(currentFenceValue, m_fence->GetCompletedValue());
     }
 
     void D3DApp::UpdateConstantBuffers()
