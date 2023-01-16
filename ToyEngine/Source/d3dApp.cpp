@@ -312,7 +312,7 @@ namespace GameCore
             
 #pragma region RootSignature
             // create a root parameter and fill it out
-            m_signature = new RootSignature(1, 1);
+            m_signature = new RootSignature(3, 1);
 
             m_signature->InitRootParameters();
             m_signature->InitStaticSamplers();
