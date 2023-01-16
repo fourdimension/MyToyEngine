@@ -31,6 +31,6 @@ ID3D12CommandAllocator* CommandAllocatorPool::RequestAllocator(uint64_t complete
 		pAllocator->SetName(AllocatorName);
 		m_CommandAllocatorPool.push_back(pAllocator);
 	}
-	return nullptr;
+	return pAllocator;
 }
 

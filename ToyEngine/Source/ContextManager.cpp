@@ -28,5 +28,5 @@ void CommandContext::Initialize()
 {
     ASSERT_SUCCEEDED(m_device != nullptr);
     m_pCmdListManager = new CommandListManager(m_device);
-    m_pCmdListManager->CreateCommandList(m_type, m_pAllocator.Get(), m_pCommandList.Get());
+    m_pCmdListManager->CreateCommandList(m_type, m_pAllocator.GetAddressOf(), m_pCommandList.GetAddressOf());
 }

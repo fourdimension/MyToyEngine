@@ -27,7 +27,7 @@ namespace GameCore
         m_fenceValue{},
         m_rtvDescriptorSize(0),
         m_signature(nullptr),
-       // m_commandListManager(nullptr),
+        m_commandListManager(nullptr),
         m_dynamicUploadHeap(GetUploadHeap())
     {
         WCHAR assetsPath[512];
@@ -79,6 +79,9 @@ namespace GameCore
 
         // Describe and create the command queue.
         m_context = new CommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+        m_commandList = m_context->GetCommandList();
+        m_commandListManager = m_context->GetCommandListManager();
+        m_commandQueue = m_commandListManager->GetCommandQueue();
 
         DXGI_SAMPLE_DESC sampleDesc = {};
         sampleDesc.Count = 1; // multisample count (no multisampling, so we just put 1, since we still need 1 sample)
@@ -95,8 +98,9 @@ namespace GameCore
         swapChainDesc.SampleDesc = sampleDesc;
 
         ComPtr<IDXGISwapChain1> swapChain;
+        
         ASSERT_SUCCEEDED(dxgiFactory->CreateSwapChainForHwnd( 
-            m_context->GetCommandListManager()->GetCommandQueue(),        // Swap chain needs the queue so that it can force a flush on it.
+            m_commandQueue.Get(),        // Swap chain needs the queue so that it can force a flush on it.
             m_hWnd,
             &swapChainDesc,
             nullptr,
@@ -341,11 +345,9 @@ namespace GameCore
             gPSO.Finalize();
 
 
-           // m_commandListManager.Create();
+           // m_m_commandListManager.Create();
         // Create the vertex/index/depth buffer.
         {
-            ID3D12GraphicsCommandList* commandList = m_context->GetCommandList();
-
             // Define the geometry for a triangle.
             VertexPosTex vertices[] =
             {
@@ -390,14 +392,15 @@ namespace GameCore
 
             GpuBuffer vertexBuffer;
             vertexBuffer.Create(L"vertex Buffer Resource Heap", vertexBufferSize / sizeof(VertexPosTex), vertexBufferSize, vertices);
+            ID3D12Resource* vertexResource = vertexBuffer.GetResource();
 
             UploadBuffer vUploadBuffer;
             vUploadBuffer.Create(L"vertex Buffer Upload Resource Heap", vertexBufferSize);
-            vUploadBuffer.UpdateData(commandList, vertexBuffer.GetResource(), vertices);
+            vUploadBuffer.UpdateData(m_commandList.Get(), vertexResource, vertices);
 
             // transition the vertex buffer data from copy destination state to vertex buffer state
-            auto vResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_vertexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
-            commandList->ResourceBarrier(1, &vResourceBarrier);
+            auto vResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(vertexResource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+            m_commandList->ResourceBarrier(1, &vResourceBarrier);
 
             DWORD indices[] = {
                         // ffront face
@@ -429,12 +432,13 @@ namespace GameCore
 
             GpuBuffer indexBuffer;
             indexBuffer.Create(L"index Buffer Resource Heap", indexBufferSize / sizeof(DWORD), indexBufferSize, indices);
+            ID3D12Resource* indexResource = indexBuffer.GetResource();
 
             UploadBuffer iUploadBuffer;
-            vUploadBuffer.Create(L"index Buffer Upload Resource Heap", indexBufferSize);
-            vUploadBuffer.UpdateData(commandList, indexBuffer.GetResource(), indices);
+            iUploadBuffer.Create(L"index Buffer Upload Resource Heap", indexBufferSize);
+            iUploadBuffer.UpdateData(m_commandList.Get(), indexResource, indices);
 
-            auto iResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_indexBuffer.Get(),
+            auto iResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(indexResource,
                 D3D12_RESOURCE_STATE_COPY_DEST,
                 D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
             m_commandList->ResourceBarrier(1, &iResourceBarrier);

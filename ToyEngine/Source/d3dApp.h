@@ -63,10 +63,10 @@ namespace GameCore
 		static HWND m_hWnd;
 
 		// App resources.
-		ComPtr<ID3D12Resource> m_vertexBuffer;
+		//ComPtr<ID3D12Resource> m_vertexBuffer;
 		D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 
-		ComPtr<ID3D12Resource> m_indexBuffer;
+		//ComPtr<ID3D12Resource> m_indexBuffer;
 		D3D12_INDEX_BUFFER_VIEW m_indexBufferView;
 
 		ComPtr<ID3D12Resource> m_depthStencilBuffer; // This is the memory for our depth buffer. it will also be used for a stencil buffer in a later tutorial
@@ -108,7 +108,7 @@ namespace GameCore
 
 		// Pipeline objects.
 		RootSignature* m_signature;
-		//CommandListManager m_commandListManager;
+		CommandListManager* m_commandListManager;
 
 		CD3DX12_VIEWPORT m_viewport;
 		CD3DX12_RECT m_scissorRect;
