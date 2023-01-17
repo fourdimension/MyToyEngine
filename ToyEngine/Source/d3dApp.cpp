@@ -347,7 +347,7 @@ namespace GameCore
 
            // m_m_commandListManager.Create();
         // Create the vertex/index/depth buffer.
-        {
+        
             // Define the geometry for a triangle.
             VertexPosTex vertices[] =
             {
@@ -445,7 +445,7 @@ namespace GameCore
                 
             m_vertexBufferView = vertexBuffer.VertexBufferView(sizeof(VertexPosTex), vertexBufferSize);
             m_indexBufferView = indexBuffer.IndexBufferView(indexBufferSize);
-        }
+        
 
         // Create the depth/stencil buffer
         {
@@ -608,7 +608,7 @@ namespace GameCore
         #pragma endregion CreateFrameResource
 
         // Now we execute the command list to upload the initial assets (triangle data)
-        m_commandList->Close();
+        ASSERT_SUCCEEDED(m_commandList->Close());
         ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
         m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
