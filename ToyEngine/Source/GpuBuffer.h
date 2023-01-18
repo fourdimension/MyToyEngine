@@ -19,9 +19,8 @@ protected:
 	
 };
 
-inline D3D12_VERTEX_BUFFER_VIEW GpuBuffer::VertexBufferView( uint32_t strideSize,
-	uint32_t bufferSize) const {
-
+inline D3D12_VERTEX_BUFFER_VIEW GpuBuffer::VertexBufferView( uint32_t strideSize, uint32_t bufferSize) const {
+	
 	D3D12_VERTEX_BUFFER_VIEW vertexView;
 	vertexView.BufferLocation = m_GpuVirtualAddress;
 	vertexView.StrideInBytes = strideSize;

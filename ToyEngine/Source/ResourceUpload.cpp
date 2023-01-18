@@ -1,14 +1,12 @@
 #include "ResourceUpload.h"
-#include "d3dApp.h"
 
-using namespace GameCore;
 
 const D3D12_INPUT_ELEMENT_DESC VertexPosTex::inputLayout[] = {
      { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
      { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 };
 
-void UploadBuffer::Create(const std::wstring& name, size_t BufferSize)
+void UploadBuffer::Create(const std::wstring& name, ID3D12Device* device, size_t BufferSize)
 {
     m_bufferSize = BufferSize;
     // create upload heap
@@ -17,7 +15,7 @@ void UploadBuffer::Create(const std::wstring& name, size_t BufferSize)
 
     CD3DX12_HEAP_PROPERTIES bufferHeapProp(D3D12_HEAP_TYPE_UPLOAD);
     auto desc = CD3DX12_RESOURCE_DESC::Buffer(BufferSize);
-    m_device->CreateCommittedResource(
+    device->CreateCommittedResource(
         &bufferHeapProp, // upload heap
         D3D12_HEAP_FLAG_NONE, // no flags
         &desc, // resource description for a buffer

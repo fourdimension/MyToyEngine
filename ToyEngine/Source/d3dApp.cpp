@@ -4,8 +4,7 @@
 #include "PipelineState.h"
 #include "CommandListManager.h"
 #include "ContextManager.h"
-#include "GpuBuffer.h"
-#include "ResourceUpload.h"
+#include "BufferManager.h"
 #include "DynamicUploadHeap.h"
 #include <sstream>
 
@@ -390,17 +389,25 @@ namespace GameCore
 
             const uint32_t vertexBufferSize = sizeof(vertices);
 
-            GpuBuffer vertexBuffer;
-            vertexBuffer.Create(L"vertex Buffer Resource Heap", vertexBufferSize / sizeof(VertexPosTex), vertexBufferSize, vertices);
-            ID3D12Resource* vertexResource = vertexBuffer.GetResource();
+            //GpuBuffer vertexBuffer;
+            g_vertexBuffer.Create(L"vertex Buffer Resource Heap", vertexBufferSize / sizeof(VertexPosTex), sizeof(VertexPosTex), vertices);
+            ID3D12Resource* vertexResource = g_vertexBuffer.GetResource();
 
-            UploadBuffer vUploadBuffer;
-            vUploadBuffer.Create(L"vertex Buffer Upload Resource Heap", vertexBufferSize);
-            vUploadBuffer.UpdateData(m_commandList.Get(), vertexResource, vertices);
+            //UploadBuffer vUploadBuffer;
+            g_vUploadBuffer.Create(L"vertex Buffer Upload Resource Heap", m_device, vertexBufferSize);
 
+            D3D12_SUBRESOURCE_DATA resourceData = {};
+            resourceData.pData = reinterpret_cast<BYTE*>(vertices); // pointer to our vertex array
+            resourceData.RowPitch = vertexBufferSize; // size of all our triangle vertex data
+            resourceData.SlicePitch = vertexBufferSize; // also the size of our triangle vertex data
+
+            UpdateSubresources(m_commandList.Get(), vertexResource, g_vUploadBuffer.GetResource(), 0, 0, 1, &resourceData);
+            //g_vUploadBuffer.UpdateData(m_commandList.Get(), vertexResource, vertices);
+            
             // transition the vertex buffer data from copy destination state to vertex buffer state
             auto vResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(vertexResource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
             m_commandList->ResourceBarrier(1, &vResourceBarrier);
+            m_vertexBufferView = g_vertexBuffer.VertexBufferView(sizeof(VertexPosTex), vertexBufferSize);
 
             DWORD indices[] = {
                         // ffront face
@@ -430,21 +437,20 @@ namespace GameCore
 
             const uint32_t indexBufferSize = sizeof(indices);
 
-            GpuBuffer indexBuffer;
-            indexBuffer.Create(L"index Buffer Resource Heap", indexBufferSize / sizeof(DWORD), indexBufferSize, indices);
-            ID3D12Resource* indexResource = indexBuffer.GetResource();
+            //GpuBuffer indexBuffer;
+            g_indexBuffer.Create(L"index Buffer Resource Heap", indexBufferSize / sizeof(DWORD), sizeof(DWORD), indices);
+            ID3D12Resource* indexResource = g_indexBuffer.GetResource();
 
-            UploadBuffer iUploadBuffer;
-            iUploadBuffer.Create(L"index Buffer Upload Resource Heap", indexBufferSize);
-            iUploadBuffer.UpdateData(m_commandList.Get(), indexResource, indices);
+            //UploadBuffer iUploadBuffer;
+            g_iUploadBuffer.Create(L"index Buffer Upload Resource Heap", m_device, indexBufferSize);
+            g_iUploadBuffer.UpdateData(m_commandList.Get(), indexResource, indices);
 
             auto iResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(indexResource,
                 D3D12_RESOURCE_STATE_COPY_DEST,
                 D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
             m_commandList->ResourceBarrier(1, &iResourceBarrier);
                 
-            m_vertexBufferView = vertexBuffer.VertexBufferView(sizeof(VertexPosTex), vertexBufferSize);
-            m_indexBufferView = indexBuffer.IndexBufferView(indexBufferSize);
+            m_indexBufferView = g_indexBuffer.IndexBufferView(indexBufferSize);
         
 
         // Create the depth/stencil buffer

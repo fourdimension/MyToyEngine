@@ -11,7 +11,7 @@ class ResourceUpload {
 class UploadBuffer : public GpuResource
 {
 public:
-	void Create(const std::wstring& name, size_t BufferSize);
+	void Create(const std::wstring& name, ID3D12Device* device,  size_t BufferSize);
 	void UpdateData(ID3D12GraphicsCommandList* list, ID3D12Resource* buffer, void* pData);
 protected:
 	size_t m_bufferSize;
