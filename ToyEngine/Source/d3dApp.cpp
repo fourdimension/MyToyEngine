@@ -12,6 +12,7 @@ namespace GameCore
 {
     HWND D3DApp::m_hWnd = nullptr;
     ID3D12Device* m_device = nullptr;
+    GraphicsPSO gPSO(L"graphicsPSO");
 
     D3DApp::D3DApp(HINSTANCE hInst)
         : m_hAppInst(hInst),
@@ -337,7 +338,8 @@ namespace GameCore
             ASSERT_SUCCEEDED(D3DCompileFromFile(L"Shaders\\Vertexshader.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
             ASSERT_SUCCEEDED(D3DCompileFromFile(L"Shaders\\Pixelshader.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
 
-            GraphicsPSO gPSO(L"graphicsPSO", m_signature);
+            //GraphicsPSO gPSO(L"graphicsPSO");
+            gPSO.SetRootSignature(*m_signature);
             gPSO.InitGraphicsPSODesc({ VertexPosTex::inputLayout, _countof(VertexPosTex::inputLayout) });
             gPSO.BindVS(vertexShader.Get());
             gPSO.BindPS(pixelShader.Get());
@@ -436,9 +438,9 @@ namespace GameCore
             };
 
             const uint32_t indexBufferSize = sizeof(indices);
-
+            numCubeIndices = indexBufferSize / sizeof(DWORD);
             //GpuBuffer indexBuffer;
-            g_indexBuffer.Create(L"index Buffer Resource Heap", indexBufferSize / sizeof(DWORD), sizeof(DWORD), indices);
+            g_indexBuffer.Create(L"index Buffer Resource Heap", numCubeIndices, sizeof(DWORD), indices);
             ID3D12Resource* indexResource = g_indexBuffer.GetResource();
 
             //UploadBuffer iUploadBuffer;
@@ -696,6 +698,7 @@ namespace GameCore
         m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
         m_commandList->IASetIndexBuffer(&m_indexBufferView);
 
+        m_commandList->SetPipelineState(gPSO.GetPipelineStateObject());
         // set camera matrix in the constant buffer
         m_commandList->SetGraphicsRootConstantBufferView(1, constantBufferUploadHeaps[m_frameIndex]->GetGPUVirtualAddress() + m_MainCamera.GetOffsetInConstantBuffer());
 

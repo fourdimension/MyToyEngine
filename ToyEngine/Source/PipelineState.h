@@ -6,19 +6,27 @@ class RootSignature;
 class PSO
 {
 public:
-	PSO(const wchar_t* name, RootSignature* rootSignature)
-		:m_name(name), m_rootSignature(rootSignature) {}
+	PSO(const wchar_t* name)
+		:m_name(name), m_rootSignature(nullptr), m_pipelineState(nullptr) {}
+
+	void SetRootSignature(const RootSignature& bindSignature)
+	{
+		m_rootSignature = &bindSignature;
+	}
+
+	ID3D12PipelineState* GetPipelineStateObject(void) const { return m_pipelineState.Get(); }
+
 protected:
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
 	const RootSignature* m_rootSignature;
 	const wchar_t* m_name;
 };
 
-class GraphicsPSO : PSO 
+class GraphicsPSO : public PSO 
 {
 public:
-	GraphicsPSO(const wchar_t* name, RootSignature* rootSignature)
-		:PSO(name, rootSignature){}
+	GraphicsPSO(const wchar_t* name)
+		:PSO(name){}
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC InitGraphicsPSODesc(const D3D12_INPUT_LAYOUT_DESC& layoutDesc);
 
@@ -35,6 +43,8 @@ public:
 
 	void Finalize();
 
+	
+
 protected:
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC m_psoDesc;
 };
@@ -44,8 +54,8 @@ class ComputePSO : PSO
 	// TODO: same as above
 
 public:
-	ComputePSO(const wchar_t* name, RootSignature* rootSignature)
-		:PSO(name, rootSignature) {}
+	ComputePSO(const wchar_t* name)
+		:PSO(name) {}
 protected:
 	D3D12_COMPUTE_PIPELINE_STATE_DESC m_psoDesc;
 };
